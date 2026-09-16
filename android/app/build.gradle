@@ -1,0 +1,45 @@
+// android/app/build.gradle
+// FIX 2 (Gradle debug): the previous revision referenced $androidxMaterialVersion
+// and $androidxCoreSplashScreenVersion, but variables.gradle (the real Capacitor 6
+// template) defines neither "androidxMaterialVersion" (Material is not a Capacitor
+// dependency) nor "androidxCoreSplashScreenVersion" (it is "coreSplashScreenVersion").
+// Material dependency removed (restores the standard Capacitor 6 template),
+// splash variable name corrected. The androidx.core:core:1.13.1 force is preserved.
+// NOTE: save this file as "build.gradle" at android/app/build.gradle
+apply plugin: 'com.android.application'
+
+android {
+    namespace "com.hoosha.crm"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.hoosha.crm"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+// Resolve the androidx.core conflict introduced by the calendar plugin's
+// transitive dependency. 1.13.1 is the last androidx.core build that works
+// with Android Gradle Plugin 8.x.
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core:1.13.1'
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.core:core:1.13.1"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    implementation project(':capacitor-cordova-android-plugins')
+}

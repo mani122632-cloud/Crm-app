@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android/app/src/main/res/drawable/ic_launcher_foreground.xml — neutral vector mark (final icon asset can replace this later) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#1a1a2e"
+        android:pathData="M24,24 h60 a8,8 0 0 1 8,8 v44 a8,8 0 0 1 -8,8 h-60 a8,8 0 0 1 -8,-8 v-44 a8,8 0 0 1 8,-8 z" />
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M40,58 L48,42 L56,54 L64,38 L72,58 Z" />
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M38,64 h32 a2,2 0 0 1 0,4 h-32 a2,2 0 0 1 0,-4 z" />
+</vector>

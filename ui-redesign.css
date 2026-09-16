@@ -1,0 +1,68 @@
+/* ui-redesign.css — PHASE 1+2 additive components.
+   Base remains style.css (Stage 8 gold/ivory palette, complete version).
+   This file only ADDS components; load it after style.css. */
+.dash-hero {
+  background: var(--text);
+  border-radius: var(--r-lg);
+  border-bottom: 3px solid var(--primary);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-3);
+  color: var(--bg);
+  box-shadow: var(--shadow-2);
+}
+.dash-hero .dh-label { font-size: var(--fs-micro); color: rgba(246,241,231,.7); }
+.dash-hero .dh-value { font-size: 1.55rem; font-weight: 800; color: #d9b44a; margin-top: 2px; }
+.dash-hero .dh-sub { font-size: var(--fs-caption); color: rgba(246,241,231,.7); margin-top: 2px; }
+
+/* professional empty state */
+.empty-pro { text-align: center; padding: var(--sp-8) var(--sp-4); animation: enterUp 250ms ease both; }
+.empty-pro .ep-icon {
+  width: 64px; height: 64px; margin: 0 auto var(--sp-3);
+  border-radius: 50%;
+  background: var(--primary-soft);
+  border: 2px dashed var(--primary);
+  display: flex; align-items: center; justify-content: center;
+}
+.empty-pro .ep-icon svg { width: 30px; height: 30px; color: var(--primary-hover); }
+.empty-pro h3 { font-size: var(--fs-body); color: var(--text-2); margin-bottom: 4px; }
+.empty-pro p { color: var(--muted); font-size: var(--fs-caption); max-width: 22rem; margin: 0 auto var(--sp-3); }
+
+/* quick-access chips (dashboard) */
+.qa-row { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: var(--sp-2); margin-bottom: var(--sp-3); -webkit-overflow-scrolling: touch; }
+.qa-chip {
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  padding: .45rem .9rem;
+  font-size: var(--fs-caption); font-weight: 600;
+  color: var(--text-2); font-family: inherit;
+  cursor: pointer; min-height: 38px;
+  transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+}
+.qa-chip:active { background: var(--primary-soft); border-color: var(--primary); transform: scale(.95); }
+
+/* customer 360 layout */
+.c360-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); margin: var(--sp-3) 0; }
+.c360-grid button {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  border-radius: var(--r-sm);
+  padding: .55rem .2rem;
+  font-size: var(--fs-micro); font-weight: 600;
+  font-family: inherit; cursor: pointer;
+  min-height: 44px;
+  transition: background var(--t-fast), transform var(--t-fast);
+}
+.c360-grid button:active { background: var(--primary-soft); border-color: var(--primary); transform: scale(.95); }
+@media (max-width: 360px) { .c360-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* contacts picker */
+.picker-list { max-height: 44vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r-sm); padding: .3rem; margin-bottom: var(--sp-3); background: var(--surface-2); }
+.picker-row { display: flex; align-items: center; gap: .6rem; padding: .5rem .4rem; border-bottom: 1px solid var(--border); }
+.picker-row:last-child { border-bottom: none; }
+.picker-row input[type="checkbox"] { width: 22px; height: 22px; flex-shrink: 0; accent-color: var(--primary); }
+.picker-row .pr-name { font-weight: 600; font-size: var(--fs-caption); }
+.picker-row .pr-phone { color: var(--muted); font-size: var(--fs-micro); }
+.picker-row .pr-exists { flex-shrink: 0; }

@@ -1,0 +1,9 @@
+// android/variables.gradle
+ext {
+    minSdkVersion = 26
+    compileSdkVersion = 34
+    targetSdkVersion = 34
+    androidxAppCompatVersion = '1.6.1'
+    androidxMaterialVersion = '1.10.0'
+    androidxCoreSplashScreenVersion = '1.0.1'
+}

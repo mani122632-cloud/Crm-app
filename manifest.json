@@ -1,0 +1,9 @@
+{
+  "name": "CRM Core",
+  "short_name": "CRM",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#1a1a2e",
+  "icons": []
+}

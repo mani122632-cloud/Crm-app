@@ -1,0 +1,214 @@
+// customer360.js — PHASE 2: professional customer file (360) + real device
+// contacts picker. Purely additive UI layer: reads data exclusively through the
+// existing services (CustomerService.detail, Repo), wires quick actions to the
+// existing open* modals, and overrides the device-contacts import flow with a
+// searchable multi-select picker. No service, DB schema or native.js change.
+/* global Routes, Repo, DB, CustomerService, CRMNative, num, Dates, $, app, fmt, esc, dateFa, dateTimeFa,
+   enterCls, toast, modal, closeModal, confirmDlg, errMsg, badge, val, secTitle, secList, guard, navigate,
+   render, showErr, customerOptions, Repo */
+
+// ============ PART A: Customer 360 ============
+(function replaceCustomerRoute() {
+  const STATUS_CLS = { open: 'info', won: 'ok', lost: 'danger' };
+  Routes.customer = async function (id) {
+    const d = await CustomerService.detail(id);
+    const c = d.customer;
+    const statuses = await Repo.list('statuses', s => s.entityType === 'customers');
+    const companies = await Repo.list('companies');
+    const comp = companies.find(x => x.id === c.companyId);
+    const st = statuses.find(s => s.id === c.statusId);
+    const cfFields = await (typeof CustomFieldService !== 'undefined' ? CustomFieldService.fieldsFor('customer') : Promise.resolve([]));
+    const cfMap = await (typeof CustomFieldService !== 'undefined' ? CustomFieldService.getValuesMap('customer', id) : Promise.resolve({}));
+
+    const openDeals = d.deals.filter(x => x.status === 'open');
+    const dealsValue = d.deals.reduce((s, x) => s + num(x.value), 0);
+    const ordersValid = d.orders.filter(o => o.status !== 'لغو شده' && o.status !== 'cancelled');
+    const ordersTotal = ordersValid.reduce((s, o) => s + Number(o.total || 0), 0);
+    const tagsAll = await Repo.list('tags');
+
+    // real timeline: all activity sources merged, sorted newest first
+    const timeline = [];
+    (d.activities || []).forEach(a => timeline.push({ at: a.createdAt, label: 'فعالیت', text: a.note || '', nav: null }));
+    (d.calls || []).forEach(x => timeline.push({ at: x.createdAt, label: 'تماس', text: x.result || '', nav: null }));
+    (d.tasks || []).forEach(x => timeline.push({ at: x.doneAt || x.createdAt, label: 'کار', text: x.title + (x.status === 'done' ? ' (انجام‌شده)' : ' (باز)'), nav: null }));
+    (d.followups || []).forEach(x => timeline.push({ at: x.doneAt || x.createdAt, label: 'پیگیری', text: x.title + ' — ' + (x.status === 'done' ? 'انجام‌شده' : x.status === 'open' ? 'باز' : 'لغو'), nav: null }));
+    (d.appointments || []).forEach(x => timeline.push({ at: x.createdAt, label: 'قرار', text: x.title + ' — ' + dateTimeFa(x.datetime), nav: null }));
+    (d.orders || []).forEach(x => timeline.push({ at: x.createdAt, label: 'سفارش', text: x.number + ' — ' + fmt(x.total), nav: 'order/' + x.id }));
+    timeline.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+
+    let h = '<div class="profile-card"><div class="profile-top">' +
+      '<div class="avatar">' + esc((c.name || '؟').charAt(0)) + '</div>' +
+      '<div class="who"><h2>' + esc(c.name) + '</h2>' +
+      '<div class="sub">' + esc(c.phone || 'بدون تلفن') + (c.email ? ' — ' + esc(c.email) : '') + '</div></div></div>' +
+      '<div class="profile-meta">' +
+      '<div class="mrow"><span class="mk">وضعیت</span><span class="mv">' + (st ? esc(st.name) : '—') + (c.archived ? ' (آرشیو)' : '') + '</span></div>' +
+      '<div class="mrow"><span class="mk">شرکت</span><span class="mv">' + (comp ? esc(comp.name) : '—') + '</span></div>' +
+      '<div class="mrow"><span class="mk">تاریخ ایجاد</span><span class="mv">' + dateFa(c.createdAt) + '</span></div>' +
+      '<div class="mrow"><span class="mk">آخرین فعالیت</span><span class="mv">' + (c.lastActivityAt ? dateFa(c.lastActivityAt) : '—') + '</span></div>' +
+      ((c.tags || []).length ? '<div class="mrow"><span class="mk">برچسب‌ها</span><span class="mv">' +
+        c.tags.map(t => { const tg = tagsAll.find(x => x.id === t); return tg ? esc(tg.name) : ''; }).filter(Boolean).join('، ') + '</span></div>' : '') +
+      '</div></div>';
+
+    // sales summary cards (real data)
+    h += '<div class="stat-cards two">' +
+      '<div class="stat"><div class="v v-anim">' + fmt(dealsValue) + '</div><div class="l">ارزش فرصت‌های فروش</div></div>' +
+      '<div class="stat"><div class="v v-anim">' + fmt(ordersTotal) + '</div><div class="l">مجموع سفارش‌ها (تومان)</div></div></div>';
+
+    // quick actions — all wired to existing modals/services
+    h += '<div class="c360-grid">' +
+      '<button id="c3-call">تماس</button>' +
+      '<button id="c3-task">کار</button>' +
+      '<button id="c3-fu">پیگیری</button>' +
+      '<button id="c3-appt">قرار</button>' +
+      '<button id="c3-deal">فرصت فروش</button>' +
+      '<button id="c3-order">سفارش</button>' +
+      '<button id="c3-note">یادداشت</button>' +
+      (typeof attachSection === 'function' ? '<button id="c3-att-scroll">پیوست‌ها</button>' : '') +
+      '</div>';
+    h += '<div class="btn-row"><button class="btn small" id="c3-edit">ویرایش</button>' +
+      '<button class="btn small ghost" id="c3-lead">تبدیل به سرنخ فروش</button>' +
+      '<button class="btn small secondary" id="c3-arch">' + (c.archived ? 'خروج از آرشیو' : 'آرشیو') + '</button>' +
+      '<button class="btn small danger" id="c3-del">حذف دائمی</button></div>';
+
+    h += secList('سرنخ‌های فروش مرتبط', d.leads, x => '<div class="list-item"><div><b>' + esc(x.name) + '</b><br><span class="muted">' + esc(x.phone || '') + (x.source ? ' — منبع: ' + esc(x.source) : '') + '</span></div>' + badge(x.customerId ? 'تبدیل‌شده' : 'باز', x.customerId ? 'info' : '') + '</div>');
+    h += secList('فرصت‌های فروش', d.deals, x => '<div class="list-item" data-nav="deal/' + x.id + '"><div><b>' + esc(x.title) + '</b><br><span class="muted">' + (x.status === 'won' ? 'برده‌شده' : x.status === 'lost' ? 'باخته' : 'باز') + (x.expectedCloseDate ? ' — فروش مورد انتظار: ' + dateFa(x.expectedCloseDate) : '') + '</span></div><span class="muted"><b>' + fmt(x.value) + '</b></span></div>');
+    h += secList('سفارش‌ها', d.orders, o => '<div class="list-item" data-nav="order/' + o.id + '"><div><b>' + esc(o.number) + '</b><br><span class="muted">' + esc(o.status) + ' — ' + dateFa(o.createdAt) + '</span></div><span class="muted"><b>' + fmt(o.total) + '</b></span></div>');
+    h += secList('پروژه‌های مرتبط', d.projects, x => '<div class="list-item" data-nav="project/' + x.id + '"><div><b>' + esc(x.name) + '</b></div><span class="muted">' + esc(x.status) + '</span></div>');
+    h += secList('تماس‌ها', d.calls, x => '<div class="list-item"><div><b>' + esc(x.result || 'بدون نتیجه') + '</b>' + (x.nextCallDate ? '<br><span class="muted">تماس بعدی: ' + dateFa(x.nextCallDate) + '</span>' : '') + '</div><span class="muted">' + dateTimeFa(x.createdAt) + '</span></div>');
+    h += secList('کارها', d.tasks, x => '<div class="list-item"><div><b>' + esc(x.title) + '</b></div><span class="muted">' + (x.dueDate ? dateFa(x.dueDate) : '—') + '</span></div>');
+    h += secList('پیگیری‌ها', d.followups, x => '<div class="list-item"><div><b>' + esc(x.title) + '</b></div><span class="muted">' + (x.dueDate ? dateFa(x.dueDate) : '—') + ' — ' + esc(x.status) + '</span></div>');
+    h += secList('قرارها', d.appointments, x => '<div class="list-item"><div><b>' + esc(x.title) + '</b></div><span class="muted">' + dateTimeFa(x.datetime) + '</span></div>');
+    if (cfFields.length) h += secTitle('فیلدهای سفارشی') + '<div class="card">' +
+      cfFields.map(f => '<div class="list-item"><span>' + esc(f.label) + '</span><span class="muted">' + esc(f.type === 'boolean' ? (cfMap[f.id] === true ? 'بله' : cfMap[f.id] === false ? 'خیر' : '—') : Array.isArray(cfMap[f.id]) ? cfMap[f.id].join('، ') : (cfMap[f.id] == null ? '—' : cfMap[f.id])) + '</span></div>').join('') + '</div>';
+
+    h += secTitle('خط زمانی (Timeline)', timeline.length) + '<div class="card">' +
+      (timeline.length ? timeline.slice(0, 60).map(t =>
+        '<div class="timeline-item"' + (t.nav ? ' data-nav="' + t.nav + '" style="cursor:pointer"' : '') + '><b>' + esc(t.label) + '</b> — ' + esc(t.text) +
+        '<br><span class="muted">' + dateTimeFa(t.at) + '</span></div>').join('') : '<div class="muted">فعالیتی ثبت نشده است</div>') + '</div>';
+
+    if (typeof attachSection === 'function') h += attachSection('customer', id);
+
+    setTimeout(function () {
+      $('#c3-call').onclick = function () { openCallForm(id); };
+      $('#c3-task').onclick = function () { openTaskForm('customer', id); };
+      $('#c3-fu').onclick = function () { openFollowupForm(id); };
+      $('#c3-appt').onclick = function () { openAppointmentForm(id); };
+      $('#c3-deal').onclick = function () { openDealForm(id); };
+      $('#c3-order').onclick = function () { openOrderForm(id); };
+      $('#c3-note').onclick = function () { openCustomerNoteForm(id); };
+      var sc = $('#c3-att-scroll');
+      if (sc) sc.onclick = function () {
+        var el = $('[id^="att-customer-"]');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      };
+      $('#c3-edit').onclick = function () { openCustomerForm(c); };
+      $('#c3-lead').onclick = function () { guard($('#c3-lead'), async function () { await CustomerService.convertToLead(id, {}); toast('سرنخ فروش ایجاد شد', 'ok'); render(id); }); };
+      $('#c3-arch').onclick = function () { guard($('#c3-arch'), async function () { await CustomerService.archive(id, !c.archived); toast(c.archived ? 'از آرشیو خارج شد' : 'آرشیو شد', 'ok'); render(id); }); };
+      $('#c3-del').onclick = function () {
+        confirmDlg('حذف دائمی مشتری؟ در صورت وجود رکورد وابسته، حذف رد می‌شود.', function () {
+          guard($('#c3-del'), async function () { await CustomerService.deleteHard(id); toast('حذف شد', 'ok'); navigate('customers'); });
+        });
+      };
+    }, 0);
+    return h;
+  };
+})();
+
+// real note activity — stored in the existing activities store via Repo.logActivity
+function openCustomerNoteForm(customerId) {
+  modal('افزودن یادداشت',
+    '<div><label>متن یادداشت</label><textarea id="cn-text"></textarea></div>' + formErr() +
+    '<button class="btn btn-block" id="cn-save">ثبت یادداشت</button>',
+    function () {
+      $('#cn-save').onclick = function () {
+        guard($('#cn-save'), async function () {
+          const text = val('cn-text').trim();
+          if (!text) throw new Error('متن یادداشت الزامی است');
+          await Repo.logActivity('note', { customerId: customerId }, text);
+          closeModal(); toast('یادداشت ثبت شد', 'ok'); render(customerId);
+        });
+      };
+    });
+}
+
+// ============ PART B: professional device-contacts import ============
+// Overrides the phase-1 basic flow. Permission logic itself lives in
+// CRMNative.pickDeviceContacts (native.js, untouched): checkPermissions first —
+// the system dialog appears only when permission is not already granted, and a
+// denial returns a Persian error without crashing.
+function openDeviceContactsImport() {
+  if (!window.CRMNative || !CRMNative.isNative()) {
+    modal('ورود از مخاطبین گوشی',
+      '<p class="muted">این قابلیت فقط در نسخه اندروید (نصب‌شده روی گوشی) در دسترس است. در مرورگر، مخاطبین را به‌صورت دستی یا از طریق ورود فایل اضافه کنید.</p>' +
+      '<button class="btn btn-block" id="dci-close">متوجه شدم</button>',
+      function () { $('#dci-close').onclick = closeModal; });
+    return;
+  }
+  modal('ورود از مخاطبین گوشی', '<div class="page-loading">در حال خواندن مخاطبین گوشی…</div>');
+  guard(null, async function () {
+    const r = await CRMNative.pickDeviceContacts();
+    closeModal();
+    if (!r.ok) { toast(r.error, 'err'); return; }
+    const list = r.contacts;
+    if (!list.length) { toast('مخاطب قابل ورود یافت نشد', 'warn'); return; }
+    const fresh = list.filter(c => !c.existsInCrm);
+    const existing = list.length - fresh.length;
+    const picked = {};
+    modal('ورود از مخاطبین گوشی',
+      '<p class="muted">' + fmt(list.length) + ' مخاطب خوانده شد — ' + fmt(existing) + ' مورد از قبل در سامانه موجود است.</p>' +
+      (fresh.length
+        ? '<div class="card" style="padding:.6rem"><input id="dci-q" type="search" placeholder="جستجو بر اساس نام یا شماره…" style="margin-bottom:.4rem"></div>' +
+          '<div class="picker-list" id="dci-list">' + fresh.map((c, i) =>
+          '<div class="picker-row" data-dci-row="' + i + '"><input type="checkbox" data-dci="' + i + '">' +
+          '<div style="min-width:0"><div class="pr-name">' + esc(c.name) + '</div>' +
+          '<div class="pr-phone">' + esc(c.phone) + '</div></div></div>').join('') + '</div>'
+        : '<p class="muted">همه مخاطبین از قبل در سامانه موجودند.</p>') +
+      formErr() +
+      '<button class="btn btn-block" id="dci-go"' + (fresh.length ? '' : ' disabled') + '>افزودن انتخاب‌شده‌ها</button>',
+      function () {
+        // live search over name + normalized digits of phone
+        const inp = $('#dci-q');
+        if (inp) inp.oninput = function () {
+          const q = inp.value.trim().toLowerCase();
+          const qDigits = q.replace(/\D/g, '');
+          document.querySelectorAll('[data-dci-row]').forEach(function (row) {
+            const idx = Number(row.dataset.dciRow);
+            const c = fresh[idx];
+            const match = !q ||
+              (c.name && c.name.toLowerCase().includes(q)) ||
+              (qDigits && c.phone && c.phone.replace(/\D/g, '').includes(qDigits));
+            row.style.display = match ? '' : 'none';
+          });
+        };
+        $('#dci-go').onclick = function () {
+          const chosen = [];
+          document.querySelectorAll('[data-dci]').forEach(function (cb) { if (cb.checked) chosen.push(fresh[Number(cb.dataset.dci)]); });
+          if (!chosen.length) { showErr(new Error('هیچ مخاطبی انتخاب نشده است')); return; }
+          guard($('#dci-go'), async function () {
+            let added = 0, dupBlocked = 0, failed = 0;
+            for (const c of chosen) {
+              try {
+                // duplicate prevention at creation time — re-check against CRM
+                const norm = String(c.phone || '').replace(/\D/g, '');
+                const dups = norm ? await Repo.list('customers', x => !x.archived && String(x.phone || '').replace(/\D/g, '') === norm) : [];
+                if (dups.length) { dupBlocked++; continue; }
+                await CustomerService.create({ name: c.name, phone: c.phone });
+                added++;
+              } catch (e) {
+                // service-level duplicate message counts as blocked, others as failures
+                if (String(e.message || '').indexOf('موجود') !== -1) dupBlocked++; else failed++;
+              }
+            }
+            closeModal();
+            let msg = fmt(added) + ' مخاطب افزوده شد';
+            if (dupBlocked) msg += ' — ' + fmt(dupBlocked) + ' مورد تکراری بود و ایجاد نشد (شماره قبلاً در سامانه موجود است)';
+            if (failed) msg += ' — ' + fmt(failed) + ' مورد ناموفق';
+            toast(msg, added ? 'ok' : 'warn');
+            render();
+          });
+        };
+      });
+  });
+}
+// keep the same entry point the contacts-page button uses
+window.openDeviceContactsImport = openDeviceContactsImport;

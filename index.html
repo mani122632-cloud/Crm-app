@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2b2b28">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="ui-redesign.css">
+<title>CRM</title>
+</head>
+<body>
+<header id="topbar">
+  <button id="btn-back" class="icon-btn" aria-label="بازگشت">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  <h1 id="screen-title">امروز</h1>
+  <button id="btn-search" class="icon-btn" aria-label="جستجو">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+  </button>
+</header>
+<nav id="searchbar" hidden>
+  <input type="search" id="global-search" placeholder="جستجو در مشتری، تلفن، شرکت، سرنخ، فرصت فروش، پروژه، محصول، سفارش..." aria-label="جستجوی سراسری">
+  <div id="search-results"></div>
+</nav>
+<main id="app"></main>
+<nav id="tabbar">
+  <button data-route="today" aria-label="امروز">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg><span>امروز</span>
+  </button>
+  <button data-route="customers" aria-label="مشتریان">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>مشتریان</span>
+  </button>
+  <button data-route="deals" aria-label="فرصت‌های فروش">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg><span>فرصت‌ها</span>
+  </button>
+  <button data-route="tasks" aria-label="کارها">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>کارها</span>
+  </button>
+  <button data-route="more" aria-label="بیشتر">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg><span>بیشتر</span>
+  </button>
+</nav>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+<script src="db.js"></script>
+<script src="repo.js"></script>
+<script src="services.js"></script>
+<script src="extensions.js"></script>
+<script src="app.js"></script>
+<script src="features.js"></script>
+<script src="customer360.js"></script>
+<script src="dashboard.js"></script>
+<script src="advanced-filters.js"></script>
+<script src="safe-backup.js"></script>
+<script src="help.js"></script>
+<script src="native.js"></script>
+<script src="contacts-auto.js"></script>
+<script src="notif-fix.js"></script>
+</body>
+</html>

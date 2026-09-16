@@ -1,0 +1,5 @@
+# android/app/proguard-rules.pro
+# Default ProGuard rules for the CRM Capacitor app.
+# WebView JavaScript bridge classes must not be stripped.
+-keep class com.getcapacitor.** { *; }
+-keep class com.hoosha.crm.** { *; }

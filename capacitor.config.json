@@ -1,0 +1,19 @@
+{
+  "appId": "com.hoosha.crm",
+  "appName": "CRM",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#faf6ee"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#b8860b"
+    }
+  }
+}
