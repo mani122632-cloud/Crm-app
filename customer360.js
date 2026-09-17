@@ -64,6 +64,12 @@
       '<button id="c3-order">سفارش</button>' +
       '<button id="c3-note">یادداشت</button>' +
       (typeof attachSection === 'function' ? '<button id="c3-att-scroll">پیوست‌ها</button>' : '') +
+      '</div>';    h += '<div class="card" id="c3-ai-summary">' +
+      '<div class="mrow" style="justify-content:space-between;align-items:center">' +
+      '<span class="mk">خلاصه هوشمند (AI)</span>' +
+      '<button class="btn small" id="c3-ai-btn">دریافت خلاصه</button>' +
+      '</div>' +
+      '<div id="c3-ai-content" class="muted" style="margin-top:.4rem">برای دریافت خلاصه، دکمه بالا را بزنید.</div>' +
       '</div>';
     h += '<div class="btn-row"><button class="btn small" id="c3-edit">ویرایش</button>' +
       '<button class="btn small ghost" id="c3-lead">تبدیل به سرنخ فروش</button>' +
