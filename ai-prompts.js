@@ -87,4 +87,17 @@ const AIPrompts = {
       'باخته شده: ' + (data.lostDeals != null ? data.lostDeals : '-') + '\n' +
       'ارزش کل: ' + (data.totalValue != null ? data.totalValue : '-');
   },
+
+  // Builds a prompt for a free-form message sent to the in-app AI
+  // assistant (chat widget). Expects: { message, history: [{ role: 'user'|'ai', text }, ...] }
+  assistantChat(data) {
+    data = data || {};
+    const history = Array.isArray(data.history) ? data.history : [];
+    const historyText = history.map(function (m) {
+      return (m.role === 'user' ? 'کاربر' : 'دستیار') + ': ' + (m.text || '');
+    }).join('\n');
+    return 'تو دستیار هوشمند داخل یک نرم‌افزار CRM فارسی هستی. کوتاه، مفید، دقیق و حرفه‌ای به زبان فارسی پاسخ بده.\n' +
+      (historyText ? 'گفتگوی قبلی:\n' + historyText + '\n\n' : '') +
+      'پیام جدید کاربر: ' + (data.message || '');
+  },
 };

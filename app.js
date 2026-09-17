@@ -4,7 +4,7 @@
 /* global Repo, DB, CustomerService, CompanyService, ContactService, LeadService, DealService,
    ProjectService, PipelineService, CallService, FollowUpService, TaskService, AppointmentService,
    NotifService, ProductService, OrderService, AutomationService, DashboardService, CalendarService,
-   SearchService, CustomFieldService, num, Dates */
+   SearchService, CustomFieldService, num, Dates, AIService */
 var $ = function (sel) { return document.querySelector(sel); };
 var app = $('#app');
 var fmt = function (n) { return Number(n || 0).toLocaleString('fa-IR'); };
@@ -971,6 +971,25 @@ Routes.deals = async function () {
   }, 0);
   return h;
 };
+// Maps AIGateway/AIService error codes to a short, user-facing Persian message
+// for the "پیشنهاد اقدام بعدی (AI)" card. Purely presentational — does not add
+// any new AI capability or touch the gateway itself.
+function ddAiErrorMessage(code) {
+  var map = {
+    AI_DISABLED: 'قابلیت هوش مصنوعی در حال حاضر غیرفعال است.',
+    GATEWAY_NOT_CONFIGURED: 'اتصال به سرویس هوش مصنوعی هنوز تنظیم نشده است.',
+    TIMEOUT: 'دریافت پیشنهاد بیش از حد طول کشید. دوباره تلاش کنید.',
+    NETWORK_ERROR: 'ارتباط با سرور برقرار نشد. اتصال اینترنت را بررسی کنید.',
+    UNAUTHORIZED: 'دسترسی به سرویس هوش مصنوعی مجاز نیست.',
+    FORBIDDEN: 'دسترسی به سرویس هوش مصنوعی مجاز نیست.',
+    INVALID_REQUEST: 'درخواست نامعتبر بود.',
+    RATE_LIMIT: 'تعداد درخواست‌ها زیاد بوده است. کمی بعد دوباره تلاش کنید.',
+    EMPTY_RESPONSE: 'پاسخی از سرویس هوش مصنوعی دریافت نشد.',
+    INVALID_RESPONSE: 'پاسخ نامعتبر از سرویس هوش مصنوعی دریافت شد.',
+    UPSTREAM_ERROR: 'سرویس هوش مصنوعی موقتاً در دسترس نیست.',
+  };
+  return (code && map[code]) || 'دریافت پیشنهاد با خطا مواجه شد. دوباره تلاش کنید.';
+}
 Routes.deal = async function (id) {
   const d = await DealService.detail(id);
   const deal = d.deal;
@@ -989,12 +1008,38 @@ Routes.deal = async function (id) {
     '<button class="btn small danger" id="dd-del">حذف دائمی</button></div>' +
     '<div class="card">' + field('تغییر مرحله', '<select id="dd-stage">' + stages.map(s => '<option value="' + s.id + '" ' + (deal.stageId === s.id ? 'selected' : '') + '>' + esc(s.name) + (s.isWon ? ' (برد)' : s.isLost ? ' (باخت)' : '') + '</option>').join('') + '</select>') + '</div>' +
     '<div class="btn-row"><button class="btn small" id="dd-call">+ تماس</button><button class="btn small" id="dd-fu">+ پیگیری</button><button class="btn small" id="dd-task">+ کار</button><button class="btn small" id="dd-proj">+ پروژه</button></div>';
+
+  // AI-powered next-action suggestion — wired to the existing AIService.suggestNextAction(dealId)
+  h += '<div class="card" id="dd-ai-card">' +
+    '<div class="section-title">پیشنهاد اقدام بعدی (AI)</div>' +
+    '<button class="btn small" id="dd-ai-btn">دریافت پیشنهاد</button>' +
+    '<div id="dd-ai-result" style="margin-top:.6rem"></div>' +
+    '</div>';
+
   h += secList('تماس‌ها', d.calls, c => '<div class="list-item" data-call="' + c.id + '"><div><b>' + esc(c.result || '—') + '</b></div><span class="muted">' + dateTimeFa(c.createdAt) + '</span></div>');
   h += secList('پیگیری‌ها', d.followups, f => '<div class="list-item"><div><b>' + esc(f.title) + '</b><br><span class="muted">' + dateFa(f.dueDate) + ' — ' + esc(f.status) + '</span></div></div>');
   h += secList('کارها', d.tasks, t => '<div class="list-item" data-task="' + t.id + '"><div><b>' + esc(t.title) + '</b></div><span class="muted">' + dateFa(t.dueDate) + '</span></div>');
   h += secTitle('Timeline') + '<div class="card">' +
     (d.activities.length ? d.activities.map(a => '<div class="timeline-item"><b>' + esc(activityLabel(a.type)) + '</b> — ' + esc(a.note || '') + '<br><span class="muted">' + dateTimeFa(a.createdAt) + '</span></div>').join('') : '<div class="muted">فعالیتی ثبت نشده</div>') + '</div>';
   setTimeout(function () {
+    var ddAiBtn = $('#dd-ai-btn');
+    if (ddAiBtn) ddAiBtn.onclick = function () {
+      guard(ddAiBtn, async function () {
+        var box = $('#dd-ai-result');
+        if (box) box.innerHTML = '<div class="muted">در حال دریافت پیشنهاد…</div>';
+        if (typeof AIService === 'undefined' || !AIService.suggestNextAction) {
+          if (box) box.innerHTML = '<div class="error-text">قابلیت پیشنهاد اقدام بعدی در دسترس نیست.</div>';
+          return;
+        }
+        var res = await AIService.suggestNextAction(id);
+        if (!box) return;
+        if (res && res.ok && res.text) {
+          box.innerHTML = '<div>' + esc(res.text).replace(/\n/g, '<br>') + '</div>';
+        } else {
+          box.innerHTML = '<div class="error-text">' + esc(ddAiErrorMessage(res && res.error)) + '</div>';
+        }
+      });
+    };
     $('#dd-edit').onclick = function () { openDealEditForm(deal); };
     $('#dd-stage').onchange = async function (e) {
       try { await DealService.changeStage(id, e.target.value); toast('مرحله تغییر کرد', 'ok'); render(id); }

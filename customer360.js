@@ -5,7 +5,7 @@
 // searchable multi-select picker. No service, DB schema or native.js change.
 /* global Routes, Repo, DB, CustomerService, CRMNative, num, Dates, $, app, fmt, esc, dateFa, dateTimeFa,
    enterCls, toast, modal, closeModal, confirmDlg, errMsg, badge, val, secTitle, secList, guard, navigate,
-   render, showErr, customerOptions, Repo */
+   render, showErr, customerOptions, Repo, AIService */
 
 // ============ PART A: Customer 360 ============
 (function replaceCustomerRoute() {
@@ -64,17 +64,18 @@
       '<button id="c3-order">سفارش</button>' +
       '<button id="c3-note">یادداشت</button>' +
       (typeof attachSection === 'function' ? '<button id="c3-att-scroll">پیوست‌ها</button>' : '') +
-      '</div>';    h += '<div class="card" id="c3-ai-summary">' +
-      '<div class="mrow" style="justify-content:space-between;align-items:center">' +
-      '<span class="mk">خلاصه هوشمند (AI)</span>' +
-      '<button class="btn small" id="c3-ai-btn">دریافت خلاصه</button>' +
-      '</div>' +
-      '<div id="c3-ai-content" class="muted" style="margin-top:.4rem">برای دریافت خلاصه، دکمه بالا را بزنید.</div>' +
       '</div>';
     h += '<div class="btn-row"><button class="btn small" id="c3-edit">ویرایش</button>' +
       '<button class="btn small ghost" id="c3-lead">تبدیل به سرنخ فروش</button>' +
       '<button class="btn small secondary" id="c3-arch">' + (c.archived ? 'خروج از آرشیو' : 'آرشیو') + '</button>' +
       '<button class="btn small danger" id="c3-del">حذف دائمی</button></div>';
+
+    // AI-powered customer summary — wired to the existing AIService.summarizeCustomer(id)
+    h += '<div class="card" id="c3-ai-card">' +
+      '<div class="section-title">خلاصه هوشمند (AI)</div>' +
+      '<button class="btn small" id="c3-ai-btn">دریافت خلاصه</button>' +
+      '<div id="c3-ai-result" style="margin-top:.6rem"></div>' +
+      '</div>';
 
     h += secList('سرنخ‌های فروش مرتبط', d.leads, x => '<div class="list-item"><div><b>' + esc(x.name) + '</b><br><span class="muted">' + esc(x.phone || '') + (x.source ? ' — منبع: ' + esc(x.source) : '') + '</span></div>' + badge(x.customerId ? 'تبدیل‌شده' : 'باز', x.customerId ? 'info' : '') + '</div>');
     h += secList('فرصت‌های فروش', d.deals, x => '<div class="list-item" data-nav="deal/' + x.id + '"><div><b>' + esc(x.title) + '</b><br><span class="muted">' + (x.status === 'won' ? 'برده‌شده' : x.status === 'lost' ? 'باخته' : 'باز') + (x.expectedCloseDate ? ' — فروش مورد انتظار: ' + dateFa(x.expectedCloseDate) : '') + '</span></div><span class="muted"><b>' + fmt(x.value) + '</b></span></div>');
@@ -107,6 +108,24 @@
         var el = $('[id^="att-customer-"]');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       };
+      var aiBtn = $('#c3-ai-btn');
+      if (aiBtn) aiBtn.onclick = function () {
+        guard(aiBtn, async function () {
+          var box = $('#c3-ai-result');
+          if (box) box.innerHTML = '<div class="muted">در حال دریافت خلاصه…</div>';
+          if (typeof AIService === 'undefined' || !AIService.summarizeCustomer) {
+            if (box) box.innerHTML = '<div class="error-text">قابلیت خلاصه هوشمند در دسترس نیست.</div>';
+            return;
+          }
+          var res = await AIService.summarizeCustomer(id);
+          if (!box) return;
+          if (res && res.ok && res.text) {
+            box.innerHTML = '<div>' + esc(res.text).replace(/\n/g, '<br>') + '</div>';
+          } else {
+            box.innerHTML = '<div class="error-text">' + esc(c3AiErrorMessage(res && res.error)) + '</div>';
+          }
+        });
+      };
       $('#c3-edit').onclick = function () { openCustomerForm(c); };
       $('#c3-lead').onclick = function () { guard($('#c3-lead'), async function () { await CustomerService.convertToLead(id, {}); toast('سرنخ فروش ایجاد شد', 'ok'); render(id); }); };
       $('#c3-arch').onclick = function () { guard($('#c3-arch'), async function () { await CustomerService.archive(id, !c.archived); toast(c.archived ? 'از آرشیو خارج شد' : 'آرشیو شد', 'ok'); render(id); }); };
@@ -119,6 +138,26 @@
     return h;
   };
 })();
+
+// Maps AIGateway/AIService error codes to a short, user-facing Persian message
+// for the "خلاصه هوشمند (AI)" card. Purely presentational — does not add any
+// new AI capability or touch the gateway itself.
+function c3AiErrorMessage(code) {
+  var map = {
+    AI_DISABLED: 'قابلیت هوش مصنوعی در حال حاضر غیرفعال است.',
+    GATEWAY_NOT_CONFIGURED: 'اتصال به سرویس هوش مصنوعی هنوز تنظیم نشده است.',
+    TIMEOUT: 'دریافت خلاصه بیش از حد طول کشید. دوباره تلاش کنید.',
+    NETWORK_ERROR: 'ارتباط با سرور برقرار نشد. اتصال اینترنت را بررسی کنید.',
+    UNAUTHORIZED: 'دسترسی به سرویس هوش مصنوعی مجاز نیست.',
+    FORBIDDEN: 'دسترسی به سرویس هوش مصنوعی مجاز نیست.',
+    INVALID_REQUEST: 'درخواست نامعتبر بود.',
+    RATE_LIMIT: 'تعداد درخواست‌ها زیاد بوده است. کمی بعد دوباره تلاش کنید.',
+    EMPTY_RESPONSE: 'پاسخی از سرویس هوش مصنوعی دریافت نشد.',
+    INVALID_RESPONSE: 'پاسخ نامعتبر از سرویس هوش مصنوعی دریافت شد.',
+    UPSTREAM_ERROR: 'سرویس هوش مصنوعی موقتاً در دسترس نیست.',
+  };
+  return (code && map[code]) || 'دریافت خلاصه با خطا مواجه شد. دوباره تلاش کنید.';
+}
 
 // real note activity — stored in the existing activities store via Repo.logActivity
 function openCustomerNoteForm(customerId) {

@@ -120,4 +120,13 @@ const AIService = {
     });
     return this._run('salesTrend:' + (periodLabel || 'all'), prompt, 'salesTrendAnalysis');
   },
+
+  // Free-form chat message from the AI assistant widget (ai-copilot.js).
+  // Not cached: each message is conversational and meant to vary per
+  // request. Does not read any CRM data store itself — the caller is
+  // responsible for what context (if any) it includes in `history`.
+  async chat(message, history) {
+    const prompt = AIPrompts.assistantChat({ message: message, history: history || [] });
+    return AIGateway.call({ operation: 'assistantChat', prompt: prompt });
+  },
 };
