@@ -29,7 +29,7 @@ jobs:
         run: npm install
 
       - name: Copy web assets and sync Capacitor
-        run: npx cap sync android
+        run: npm run cap:sync
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
