@@ -9,7 +9,8 @@ const files = [
   'style.css', 'ui-redesign.css',
   'db.js', 'repo.js', 'services.js', 'extensions.js', 'app.js',
   'features.js', 'customer360.js', 'dashboard.js', 'advanced-filters.js',
-  'safe-backup.js', 'help.js', 'native.js', 'contacts-auto.js', 'notif-fix.js'
+  'safe-backup.js', 'help.js', 'native.js', 'contacts-auto.js', 'notif-fix.js',
+  'ai-config.js', 'ai-prompts.js', 'ai-gateway.js', 'ai-cache.js', 'ai-service.js', 'ai-copilot.js'
 ];
 if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
 let ok = 0;
