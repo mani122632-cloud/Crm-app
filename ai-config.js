@@ -20,7 +20,7 @@ const AIConfig = {
   // Shared app-to-gateway auth token, sent as the X-App-Token header.
   // PLACEHOLDER ONLY — the real value is never stored in source and
   // must be provided through a secure mechanism outside this file.
-  APP_SHARED_TOKEN: '',
+  APP_SHARED_TOKEN: 'Mahan9012',
 
   // Per-feature flags — allows enabling AI capabilities one at a time
   // later without touching this file's structure.
