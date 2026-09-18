@@ -35,11 +35,21 @@ const Money = {
     return { subtotal, discount: itemDiscounts + extraDiscount, tax, total: base + tax };
   },
 };
+// BUGFIX (timezone date-shift): todayStr()/addDays() used to build the date
+// string from toISOString(), which is UTC. For any user ahead of UTC (e.g.
+// Iran, UTC+3:30) that shifts "today" back a day for every moment between
+// local midnight and UTC midnight — tasks/follow-ups due "today" silently
+// disappear from Today lists, the automation stall-check dedup key rolls
+// over at the wrong instant, and new records default to yesterday's date.
+// Fixed to read the device's local Y/M/D instead of the UTC ones.
+function localDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 const Dates = {
-  todayStr() { return new Date().toISOString().slice(0, 10); },
+  todayStr() { return localDateStr(new Date()); },
   isToday(iso) { return !!iso && iso.slice(0, 10) === this.todayStr(); },
   isOverdue(iso) { return !!iso && iso.slice(0, 10) < this.todayStr(); },
-  addDays(n) { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); },
+  addDays(n) { const d = new Date(); d.setDate(d.getDate() + n); return localDateStr(d); },
   daysSince(iso) { if (!iso) return null; return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); },
 };
 const SYSTEM_ACTIVITY_TYPES = ['customer_created', 'customer_updated', 'lead_created', 'lead_updated', 'lead_converted', 'convert_lead', 'deal_created', 'deal_stage', 'project_created', 'call', 'followup_created', 'followup_done', 'task_created', 'task_done', 'order', 'appointment'];
