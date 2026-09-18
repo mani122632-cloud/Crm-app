@@ -6,6 +6,7 @@ const root = path.join(__dirname, '..');
 const dest = path.join(root, 'www');
 const files = [
   'index.html', 'manifest.json',
+    'capacitor.js', 'contacts-plugin.js',
   'style.css', 'ui-redesign.css',
   'db.js', 'repo.js', 'services.js', 'extensions.js', 'app.js',
   'features.js', 'customer360.js', 'dashboard.js', 'advanced-filters.js',
