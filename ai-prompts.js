@@ -96,7 +96,13 @@ const AIPrompts = {
     const historyText = history.map(function (m) {
       return (m.role === 'user' ? 'کاربر' : 'دستیار') + ': ' + (m.text || '');
     }).join('\n');
-    return 'تو دستیار هوشمند داخل یک نرم‌افزار CRM فارسی هستی. کوتاه، مفید، دقیق و حرفه‌ای به زبان فارسی پاسخ بده.\n' +
+
+    const contextText = data.context
+      ? '\nاطلاعات واقعی موجود در CRM:\n' + JSON.stringify(data.context, null, 2) + '\n'
+      : '';
+
+    return 'تو دستیار هوشمند داخل یک نرم‌افزار CRM فارسی هستی. کوتاه، مفید، دقیق و حرفه‌ای به زبان فارسی پاسخ بده. فقط بر اساس اطلاعات واقعی ارائه‌شده پاسخ بده و اگر اطلاعات لازم وجود ندارد، صادقانه بگو که در داده‌های در دسترس نیست.\n' +
+      contextText +
       (historyText ? 'گفتگوی قبلی:\n' + historyText + '\n\n' : '') +
       'پیام جدید کاربر: ' + (data.message || '');
   },

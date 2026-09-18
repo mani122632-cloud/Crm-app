@@ -125,8 +125,49 @@ const AIService = {
   // Not cached: each message is conversational and meant to vary per
   // request. Does not read any CRM data store itself — the caller is
   // responsible for what context (if any) it includes in `history`.
-  async chat(message, history) {
-    const prompt = AIPrompts.assistantChat({ message: message, history: history || [] });
+  async chat(message, history, context) {
+    if (!context) {
+      const customers = await Repo.list('customers', function (c) {
+        return !c.archived;
+      });
+
+      const companies = await Repo.list('companies', function (c) {
+        return !c.archived;
+      });
+
+      const companyMap = {};
+      companies.forEach(function (company) {
+        companyMap[company.id] = company.name || '';
+      });
+
+      const statuses = await Repo.list('statuses', function (s) {
+        return s.entityType === 'customer';
+      });
+
+      const statusMap = {};
+      statuses.forEach(function (status) {
+        statusMap[status.id] = status.name || '';
+      });
+
+      context = {
+        customers: customers.map(function (c) {
+          return {
+            id: c.id,
+            name: c.name || '',
+            phone: c.phone || '',
+            company: companyMap[c.companyId] || '',
+            status: statusMap[c.statusId] || ''
+          };
+        })
+      };
+    }
+
+    const prompt = AIPrompts.assistantChat({
+      message: message,
+      history: history || [],
+      context: context
+    });
+
     return AIGateway.call({ operation: 'assistantChat', prompt: prompt });
   },
 };
