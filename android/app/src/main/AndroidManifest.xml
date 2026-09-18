@@ -6,13 +6,17 @@
      BUGFIX: POST_NOTIFICATIONS added — required on Android 13+ (targetSdk 34)
      for @capacitor/local-notifications requestPermissions() to have any
      effect; without this declaration the OS silently blocks the runtime
-     dialog regardless of app code. -->
+     dialog regardless of app code.
+     NOTIFICATIONS: SCHEDULE_EXACT_ALARM added so reminders can fire at the exact
+     minute (Android 12+); the user grants it from Settings (see notif-fix.js). Without
+     it reminders still work but may arrive minutes late while the phone is idle. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

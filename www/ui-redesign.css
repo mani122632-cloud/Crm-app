@@ -11,7 +11,7 @@
   box-shadow: var(--shadow-2);
 }
 .dash-hero .dh-label { font-size: var(--fs-micro); color: rgba(246,241,231,.7); }
-.dash-hero .dh-value { font-size: 1.55rem; font-weight: 800; color: #d9b44a; margin-top: 2px; }
+.dash-hero .dh-value { font-size: 1.55rem; font-weight: 800; color: #d3b785; margin-top: 2px; }
 .dash-hero .dh-sub { font-size: var(--fs-caption); color: rgba(246,241,231,.7); margin-top: 2px; }
 
 /* professional empty state */
@@ -66,3 +66,20 @@
 .picker-row .pr-name { font-weight: 600; font-size: var(--fs-caption); }
 .picker-row .pr-phone { color: var(--muted); font-size: var(--fs-micro); }
 .picker-row .pr-exists { flex-shrink: 0; }
+
+/* "بیشتر" navigation hub — icon-led rows grouped by category.
+   Scoped to .mi-ico/.mi-chev only, so no other .list-item usage
+   elsewhere in the app is affected. Icons stay neutral (never gold)
+   so the hub reads calm; press feedback reuses the existing
+   .list-item:active rule from style.css. */
+.menu-card { margin-bottom: var(--sp-4); }
+.mi-ico {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.mi-ico svg { width: 18px; height: 18px; }
+.mi-chev { flex-shrink: 0; display: flex; align-items: center; color: var(--faint); }
+.mi-chev svg { width: 16px; height: 16px; }

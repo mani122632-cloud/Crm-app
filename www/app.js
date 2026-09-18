@@ -2313,11 +2313,22 @@ function openDeviceContactsImport() {
     return;
   }
   modal('ورود از مخاطبین گوشی', '<div class="page-loading">در حال خواندن مخاطبین گوشی…</div>');
-  guard(null, async function () {
-    const r = await CRMNative.pickDeviceContacts();
+  // BUGFIX (infinite loading): guard(btn, fn) returns immediately without
+  // calling fn when btn is falsy — guard(null, ...) here meant
+  // pickDeviceContacts() never ran and the loading modal never closed.
+  // Run the step directly with its own try/catch so the modal always closes.
+  (async function () {
+    let r;
+    try {
+      r = await CRMNative.pickDeviceContacts();
+    } catch (e) {
+      closeModal();
+      toast('خطای غیرمنتظره: ' + (e && e.message ? e.message : 'نامشخص'), 'err');
+      return;
+    }
     if (!r.ok) { closeModal(); toast(r.error, 'err'); return; }
     const list = r.contacts;
-    if (!list.length) { closeModal(); toast('مخاطب قابل_IMPORT یافت نشد', 'warn'); return; }
+    if (!list.length) { closeModal(); toast('مخاطب قابل ورود در گوشی یافت نشد', 'warn'); return; }
     const selectable = list.filter(c => !c.existsInCrm);
     const existing = list.length - selectable.length;
     let picked = {};
@@ -2348,7 +2359,7 @@ function openDeviceContactsImport() {
           });
         };
       });
-  });
+  })();
 }
 (function wrapContactsRoute() {
   const orig = Routes.contacts;

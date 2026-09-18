@@ -190,8 +190,26 @@ function openDeviceContactsImport() {
     return;
   }
   modal('ورود از مخاطبین گوشی', '<div class="page-loading">در حال خواندن مخاطبین گوشی…</div>');
-  guard(null, async function () {
-    const r = await CRMNative.pickDeviceContacts();
+  // BUGFIX (infinite loading): guard(btn, fn) does `if (!btn || ...) return;`
+  // — passing null as btn made it return immediately WITHOUT ever calling fn,
+  // so CRMNative.pickDeviceContacts() never ran and closeModal() never fired;
+  // the loading modal above spun forever regardless of permission state,
+  // contacts on the device, or plugin errors. Running the step directly here
+  // (with its own try/catch) guarantees the loading modal always closes —
+  // on success, on any ok:false from pickDeviceContacts (permission denied,
+  // permanently denied, plugin unavailable, native error, no contacts, read
+  // error), and even on a totally unexpected thrown exception. The global
+  // guard() itself is untouched — it's still used correctly elsewhere with
+  // real buttons — this only stops using it with a null button here.
+  (async function () {
+    let r;
+    try {
+      r = await CRMNative.pickDeviceContacts();
+    } catch (e) {
+      closeModal();
+      toast('خطای غیرمنتظره: ' + (e && e.message ? e.message : 'نامشخص'), 'err');
+      return;
+    }
     closeModal();
     if (!r.ok) { toast(r.error, 'err'); return; }
     const list = r.contacts;
@@ -253,7 +271,7 @@ function openDeviceContactsImport() {
           });
         };
       });
-  });
+  })();
 }
 // keep the same entry point the contacts-page button uses
 window.openDeviceContactsImport = openDeviceContactsImport;

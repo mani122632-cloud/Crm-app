@@ -3,7 +3,7 @@
   "short_name": "CRM",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#f5f6f8",
-  "theme_color": "#1a1a2e",
+  "background_color": "#fbf8f2",
+  "theme_color": "#201e1a",
   "icons": []
 }

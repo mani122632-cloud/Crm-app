@@ -38,29 +38,65 @@
     return String(p).trim();
   }
 
+  // ---- timeout safety net for native plugin calls ----
+  // A native-side call whose resolve/reject never fires (rather than an
+  // explicit denial or thrown error) is the one way these awaits could hang
+  // forever. This races the real call against a timer so every step here
+  // always settles. It's a backstop only — it does not replace the actual
+  // API-shape/permission-state fixes below. checkPermissions() is a local
+  // flag read (short timeout is safe); requestPermissions() waits on the
+  // user looking at a system dialog, so it gets much more room.
+  function withTimeout(promise, ms, label) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        reject(new Error('TIMEOUT:' + label));
+      }, ms);
+      promise.then(
+        function (v) { if (settled) return; settled = true; clearTimeout(timer); resolve(v); },
+        function (e) { if (settled) return; settled = true; clearTimeout(timer); reject(e); }
+      );
+    });
+  }
+
   // ---- real permission check/request via @capacitor-community/contacts ----
+  // Returns { granted, permanent, error }. "permanent" distinguishes a hard
+  // Android "denied" (no dialog will show again — user must use Settings)
+  // from an ordinary not-yet-granted state, instead of collapsing every
+  // non-granted outcome into one generic "denied" flag.
   async function ensureContactsPermission(C) {
     var perm = null;
-    try { perm = await C.checkPermissions(); } catch (e) { perm = null; }
-    var granted = !!(perm && (perm.contacts === 'granted' || perm.readContacts === 'granted'));
-    if (granted) return { granted: true, denied: false };
+    try { perm = await withTimeout(C.checkPermissions(), 10000, 'permission_check'); } catch (e) { return { granted: false, permanent: false, error: true }; }
+    var state = perm && perm.contacts;
+    if (state === 'granted') return { granted: true, permanent: false, error: false };
+    if (state === 'denied') {
+      // already hard-denied: requesting again would just silently re-resolve
+      // to denied with no dialog, so don't loop — surface it as permanent.
+      return { granted: false, permanent: true, error: false };
+    }
     // request ONLY now (one-shot per visit — no loop)
     attemptMadeThisVisit = true;
     var req = null;
-    try { req = await C.requestPermissions(); } catch (e) { req = null; }
-    granted = !!(req && (req.contacts === 'granted' || req.readContacts === 'granted'));
-    var denied = !!(req && (req.contacts === 'denied' || req.readContacts === 'denied'));
-    return { granted: granted, denied: denied || !granted };
+    try { req = await withTimeout(C.requestPermissions(), 60000, 'permission_request'); } catch (e) { return { granted: false, permanent: false, error: true }; }
+    var reqState = req && req.contacts;
+    if (reqState === 'granted') return { granted: true, permanent: false, error: false };
+    return { granted: false, permanent: reqState === 'denied', error: false };
   }
 
   // ---- read real device contacts ----
+  // CHANGE: @capacitor-community/contacts' getContacts() takes
+  // { projection: {...} }, not { fields: [...] } — the previous "fields"
+  // key isn't part of this plugin's API, so it was silently ignored and
+  // every contact came back with no name/phones populated (looked like "no
+  // contacts" or a read failure). Fixed to the real API shape.
   async function readDeviceContacts(C) {
     var result = null;
     try {
-      result = await C.getContacts({ fields: ['name', 'phones'] });
-    } catch (e1) {
-      try { result = await C.getContacts({ fields: ['firstName', 'phones'] }); }
-      catch (e2) { return null; }
+      result = await withTimeout(C.getContacts({ projection: { name: true, phones: true } }), 30000, 'read');
+    } catch (e) {
+      return null;
     }
     var contacts = (result && result.contacts) || [];
     var seen = {};
@@ -70,11 +106,13 @@
       var phones = (ct && (ct.phones || ct.phoneNumbers)) || [];
       phones.forEach(function (p) {
         var number = contactNumber(p);
-        if (!number || !name) return;
+        if (!number) return; // no number → never imported
         var key = number.replace(/\D/g, '');
         if (!key || seen[key]) return;
         seen[key] = true;
-        list.push({ name: name, phone: number });
+        // a contact with a number but no name is kept (number used as the
+        // display name) instead of being silently dropped, as before.
+        list.push({ name: name || number, phone: number });
       });
     });
     return list;
@@ -103,12 +141,12 @@
     // 1) real permission check (+ automatic real request if not granted)
     var pr = await ensureContactsPermission(C);
     if (!pr.granted) {
-      showDeniedBanner(pr.denied);
+      showDeniedBanner(pr.permanent, pr.error);
       return;
     }
     // 2) real read of device contacts
     var list = await readDeviceContacts(C);
-    if (!list) { toast('خواندن مخاطبین گوشی ناموفق بود', 'err'); return; }
+    if (list === null) { toast('خواندن مخاطبین گوشی ناموفق بود', 'err'); return; }
     if (!list.length) { toast('مخاطب قابل ورود در گوشی یافت نشد', 'info'); return; }
     // 3) real duplicate detection against CRM (normalized phone numbers)
     var customers = await Repo.list('customers');
@@ -127,16 +165,22 @@
     openImportPicker(fresh, existingCount);
   }
 
-  // ---- Persian banner when permission is denied (no crash, retry available) ----
-  function showDeniedBanner(denied) {
+  // ---- Persian banner when permission is denied (no crash) ----
+  // "permanent" (Android already hard-denied, no dialog will show again)
+  // gets Settings guidance and no retry button, since retrying would just
+  // silently re-resolve to denied. A transient not-yet-granted state (or a
+  // real error checking permission) still offers a one-shot retry.
+  function showDeniedBanner(permanent, error) {
     var box = document.getElementById('contacts-denied-banner');
     if (!box) return;
+    var title = error ? 'بررسی مجوز مخاطبین با خطا مواجه شد.' : 'مجوز دسترسی به مخاطبین داده نشد.';
+    var body = permanent
+      ? 'مجوز قبلاً رد شده و اندروید دیگر پنجره درخواست را نشان نمی‌دهد. از تنظیمات اندروید ← برنامه‌ها ← CRM ← مجوزها آن را فعال کنید.'
+      : 'برای ورود خودکار مخاطبین، اجازه دسترسی لازم است.';
     box.innerHTML = '<div class="card" style="border-color:var(--warning-border);background:var(--warning-bg)">' +
-      '<b style="color:var(--warning)">مجوز دسترسی به مخاطبین داده نشد.</b>' +
-      '<p class="muted" style="margin:.3rem 0 .6rem">' + (denied
-        ? 'می‌توانید از تنظیمات اندروید این مجوز را فعال کنید یا اینجا دوباره تلاش کنید.'
-        : 'برای ورود خودکار مخاطبین، اجازه دسترسی لازم است.') + '</p>' +
-      '<button class="btn small" id="contacts-retry">تلاش مجدد</button></div>';
+      '<b style="color:var(--warning)">' + title + '</b>' +
+      '<p class="muted" style="margin:.3rem 0 .6rem">' + body + '</p>' +
+      (permanent ? '' : '<button class="btn small" id="contacts-retry">تلاش مجدد</button>') + '</div>';
     var btn = document.getElementById('contacts-retry');
     if (btn) btn.onclick = function () {
       if (attemptMadeThisVisit && retryLinkArmed) return; // one-shot per visit
@@ -214,8 +258,15 @@
         if (add && add.parentNode) add.parentNode.insertBefore(wrap, add);
       }, 0);
       // run the automatic flow — but AFTER the page has rendered (so the banner
-      // placeholder exists and the user sees the page first)
-      setTimeout(function () { runAutoImport(); }, 150);
+      // placeholder exists and the user sees the page first). Catch is
+      // required here: runAutoImport is async, and an uncaught rejection
+      // (e.g. Repo.list failing) would otherwise vanish silently with no
+      // user feedback and no way to tell the flow ever stopped.
+      setTimeout(function () {
+        runAutoImport().catch(function (e) {
+          toast('اجرای ورود خودکار مخاطبین با خطا متوقف شد: ' + (e && e.message ? e.message : 'نامشخص'), 'err');
+        });
+      }, 150);
       return html;
     };
   })();
