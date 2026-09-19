@@ -176,11 +176,13 @@ function openCustomerNoteForm(customerId) {
     });
 }
 
-// ============ PART B: professional device-contacts import ============
-// Overrides the phase-1 basic flow. Permission logic itself lives in
-// CRMNative.pickDeviceContacts (native.js, untouched): checkPermissions first —
-// the system dialog appears only when permission is not already granted, and a
-// denial returns a Persian error without crashing.
+// ============ manual device-contacts import (the "افزودن از مخاطبین گوشی" button) ============
+// The only native call here is CRMNative.pickDeviceContacts (native.js) — the same
+// single implementation the automatic first-visit flow uses (contacts-auto.js), so
+// permission handling and contact reading behave identically everywhere. On success
+// this opens the shared picker (CRMContactsImport.openPicker, contacts-auto.js) —
+// the same search + multi-select UI used by the automatic flow — instead of a
+// second, independent picker implementation.
 function openDeviceContactsImport() {
   if (!window.CRMNative || !CRMNative.isNative()) {
     modal('ورود از مخاطبین گوشی',
@@ -190,17 +192,9 @@ function openDeviceContactsImport() {
     return;
   }
   modal('ورود از مخاطبین گوشی', '<div class="page-loading">در حال خواندن مخاطبین گوشی…</div>');
-  // BUGFIX (infinite loading): guard(btn, fn) does `if (!btn || ...) return;`
-  // — passing null as btn made it return immediately WITHOUT ever calling fn,
-  // so CRMNative.pickDeviceContacts() never ran and closeModal() never fired;
-  // the loading modal above spun forever regardless of permission state,
-  // contacts on the device, or plugin errors. Running the step directly here
-  // (with its own try/catch) guarantees the loading modal always closes —
-  // on success, on any ok:false from pickDeviceContacts (permission denied,
-  // permanently denied, plugin unavailable, native error, no contacts, read
-  // error), and even on a totally unexpected thrown exception. The global
-  // guard() itself is untouched — it's still used correctly elsewhere with
-  // real buttons — this only stops using it with a null button here.
+  // The step runs directly here (own try/catch), not via guard(btn, fn), because
+  // there is no real button element while this loading modal is open — guard()
+  // would silently do nothing with a falsy target and the modal would spin forever.
   (async function () {
     let r;
     try {
@@ -212,65 +206,12 @@ function openDeviceContactsImport() {
     }
     closeModal();
     if (!r.ok) { toast(r.error, 'err'); return; }
-    const list = r.contacts;
+    const list = r.contacts || [];
     if (!list.length) { toast('مخاطب قابل ورود یافت نشد', 'warn'); return; }
     const fresh = list.filter(c => !c.existsInCrm);
     const existing = list.length - fresh.length;
-    const picked = {};
-    modal('ورود از مخاطبین گوشی',
-      '<p class="muted">' + fmt(list.length) + ' مخاطب خوانده شد — ' + fmt(existing) + ' مورد از قبل در سامانه موجود است.</p>' +
-      (fresh.length
-        ? '<div class="card" style="padding:.6rem"><input id="dci-q" type="search" placeholder="جستجو بر اساس نام یا شماره…" style="margin-bottom:.4rem"></div>' +
-          '<div class="picker-list" id="dci-list">' + fresh.map((c, i) =>
-          '<div class="picker-row" data-dci-row="' + i + '"><input type="checkbox" data-dci="' + i + '">' +
-          '<div style="min-width:0"><div class="pr-name">' + esc(c.name) + '</div>' +
-          '<div class="pr-phone">' + esc(c.phone) + '</div></div></div>').join('') + '</div>'
-        : '<p class="muted">همه مخاطبین از قبل در سامانه موجودند.</p>') +
-      formErr() +
-      '<button class="btn btn-block" id="dci-go"' + (fresh.length ? '' : ' disabled') + '>افزودن انتخاب‌شده‌ها</button>',
-      function () {
-        // live search over name + normalized digits of phone
-        const inp = $('#dci-q');
-        if (inp) inp.oninput = function () {
-          const q = inp.value.trim().toLowerCase();
-          const qDigits = q.replace(/\D/g, '');
-          document.querySelectorAll('[data-dci-row]').forEach(function (row) {
-            const idx = Number(row.dataset.dciRow);
-            const c = fresh[idx];
-            const match = !q ||
-              (c.name && c.name.toLowerCase().includes(q)) ||
-              (qDigits && c.phone && c.phone.replace(/\D/g, '').includes(qDigits));
-            row.style.display = match ? '' : 'none';
-          });
-        };
-        $('#dci-go').onclick = function () {
-          const chosen = [];
-          document.querySelectorAll('[data-dci]').forEach(function (cb) { if (cb.checked) chosen.push(fresh[Number(cb.dataset.dci)]); });
-          if (!chosen.length) { showErr(new Error('هیچ مخاطبی انتخاب نشده است')); return; }
-          guard($('#dci-go'), async function () {
-            let added = 0, dupBlocked = 0, failed = 0;
-            for (const c of chosen) {
-              try {
-                // duplicate prevention at creation time — re-check against CRM
-                const norm = String(c.phone || '').replace(/\D/g, '');
-                const dups = norm ? await Repo.list('customers', x => !x.archived && String(x.phone || '').replace(/\D/g, '') === norm) : [];
-                if (dups.length) { dupBlocked++; continue; }
-                await CustomerService.create({ name: c.name, phone: c.phone });
-                added++;
-              } catch (e) {
-                // service-level duplicate message counts as blocked, others as failures
-                if (String(e.message || '').indexOf('موجود') !== -1) dupBlocked++; else failed++;
-              }
-            }
-            closeModal();
-            let msg = fmt(added) + ' مخاطب افزوده شد';
-            if (dupBlocked) msg += ' — ' + fmt(dupBlocked) + ' مورد تکراری بود و ایجاد نشد (شماره قبلاً در سامانه موجود است)';
-            if (failed) msg += ' — ' + fmt(failed) + ' مورد ناموفق';
-            toast(msg, added ? 'ok' : 'warn');
-            render();
-          });
-        };
-      });
+    if (!fresh.length) { toast('همه ' + fmt(list.length) + ' مخاطب گوشی از قبل در سامانه موجودند', 'info'); return; }
+    window.CRMContactsImport.openPicker(fresh, existing);
   })();
 }
 // keep the same entry point the contacts-page button uses

@@ -2303,64 +2303,10 @@ function persianize(html) {
 })();
 
 // ============ 3) Wire native bridges ============
-// 3a) Contacts import — button on the contacts page + customers page
-function openDeviceContactsImport() {
-  if (!window.CRMNative || !CRMNative.isNative()) {
-    modal('ورود مخاطبین گوشی',
-      '<p class="muted">این قابلیت فقط در نسخه اندروید (نصب‌شده روی گوشی) در دسترس است. در مرورگر، مخاطبین را به‌صورت دستی یا از طریق ورود فایل اضافه کنید.</p>' +
-      '<button class="btn btn-block" id="dci-close">متوجه شدم</button>',
-      function () { $('#dci-close').onclick = closeModal; });
-    return;
-  }
-  modal('ورود از مخاطبین گوشی', '<div class="page-loading">در حال خواندن مخاطبین گوشی…</div>');
-  // BUGFIX (infinite loading): guard(btn, fn) returns immediately without
-  // calling fn when btn is falsy — guard(null, ...) here meant
-  // pickDeviceContacts() never ran and the loading modal never closed.
-  // Run the step directly with its own try/catch so the modal always closes.
-  (async function () {
-    let r;
-    try {
-      r = await CRMNative.pickDeviceContacts();
-    } catch (e) {
-      closeModal();
-      toast('خطای غیرمنتظره: ' + (e && e.message ? e.message : 'نامشخص'), 'err');
-      return;
-    }
-    if (!r.ok) { closeModal(); toast(r.error, 'err'); return; }
-    const list = r.contacts;
-    if (!list.length) { closeModal(); toast('مخاطب قابل ورود در گوشی یافت نشد', 'warn'); return; }
-    const selectable = list.filter(c => !c.existsInCrm);
-    const existing = list.length - selectable.length;
-    let picked = {};
-    modal('ورود از مخاطبین گوشی',
-      '<p class="muted">' + fmt(list.length) + ' مخاطب خوانده شد — ' + fmt(existing) + ' مورد از قبل در سامانه موجود است و نمایش داده نمی‌شود.' +
-      (selectable.length ? ' موارد زیر را انتخاب کنید:' : '') + '</p>' +
-      (selectable.length
-        ? '<div class="card" style="max-height:40vh;overflow-y:auto;padding:.5rem">' + selectable.map((c, i) =>
-          '<div class="list-item"><div><b>' + esc(c.name) + '</b><br><span class="muted">' + esc(c.phone) + '</span></div>' +
-          '<input type="checkbox" data-dci="' + i + '" style="width:22px;height:22px;accent-color:var(--primary)"></div>').join('') + '</div>'
-        : '<p class="muted">همه مخاطبین از قبل در سامانه موجودند.</p>') +
-      formErr() +
-      '<button class="btn btn-block" id="dci-go"' + (selectable.length ? '' : ' disabled') + '>افزودن انتخاب‌شده‌ها</button>',
-      function () {
-        $('#dci-go').onclick = function () {
-          const chosen = [];
-          document.querySelectorAll('[data-dci]').forEach(cb => { if (cb.checked) chosen.push(selectable[Number(cb.dataset.dci)]); });
-          if (!chosen.length) { showErr(new Error('هیچ مخاطبی انتخاب نشده است')); return; }
-          guard($('#dci-go'), async function () {
-            let added = 0, failed = 0;
-            for (const c of chosen) {
-              try { await CustomerService.create({ name: c.name, phone: c.phone }); added++; }
-              catch (e) { failed++; }
-            }
-            closeModal();
-            toast(fmt(added) + ' مخاطب اضافه شد' + (failed ? ' — ' + fmt(failed) + ' مورد ناموفق' : ''), failed ? 'warn' : 'ok');
-            render();
-          });
-        };
-      });
-  })();
-}
+// 3a) Contacts import — button on the contacts page.
+// openDeviceContactsImport() itself is defined once, in customer360.js (loaded
+// after this file), which is the single implementation the button below calls —
+// see that file for the actual native-contacts flow and the shared picker.
 (function wrapContactsRoute() {
   const orig = Routes.contacts;
   Routes.contacts = async function () {

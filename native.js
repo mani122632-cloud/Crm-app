@@ -526,14 +526,53 @@
 
   var CRMNative = {};
 
-  CRMNative.pickDeviceContacts = async function () {
+  // A native Exception thrown by Capacitor's own registerPlugin() proxy (not by the
+  // plugin's Android code) always carries code 'UNIMPLEMENTED' and a message of the
+  // exact shape "<Plugin> plugin is not implemented on android" — this means the
+  // native Android module for that plugin was never compiled into the app (a build/
+  // registration problem), which is a different, more specific situation than a
+  // plugin method genuinely failing on the Android side. Surfacing it as its own
+  // code lets the UI tell the two apart instead of collapsing everything into one
+  // generic "native error" message.
+  function isNativeNotImplemented(e) {
+    return !!(e && (e.code === 'UNIMPLEMENTED' || /is not implemented on/.test(String(e.message || ''))));
+  }
+
+  // pickDeviceContacts is the single, canonical place that talks to the native
+  // Contacts plugin. Every entry point in the app (the automatic first-visit flow
+  // and the manual "افزودن از مخاطبین گوشی" button) calls this one function, so
+  // there is exactly one implementation of permission/read/normalize/dedupe logic
+  // and no risk of two independent code paths racing to request permission at the
+  // same time. A single in-flight call is shared with any concurrent caller instead
+  // of firing a second native request.
+  var pickInFlight = null;
+  CRMNative.pickDeviceContacts = function () {
+    if (pickInFlight) return pickInFlight;
+    pickInFlight = pickDeviceContactsOnce().finally(function () { pickInFlight = null; });
+    return pickInFlight;
+  };
+
+  async function pickDeviceContactsOnce() {
     var C = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Contacts;
-    if (!C) return { ok: false, code: 'unavailable', error: 'پلاگین مخاطبین در این نسخه ثبت نشده است؛ یک بار دستور npx cap sync android را اجرا و برنامه را دوباره نصب کنید' };
+    if (!C) {
+      return {
+        ok: false,
+        code: 'unavailable',
+        error: 'افزونه مخاطبین در این نسخه در دسترس نیست؛ برنامه را دوباره نصب یا به‌روزرسانی کنید'
+      };
+    }
 
     var perm = null;
     try {
       perm = await withTimeout(C.checkPermissions(), 10000, 'permission_check');
     } catch (e) {
+      if (isNativeNotImplemented(e)) {
+        return {
+          ok: false,
+          code: 'native_not_implemented',
+          error: 'افزونه مخاطبین به‌صورت Native در این نسخه نصب‌شده ثبت نشده است. لطفاً از نصب آخرین نسخه برنامه مطمئن شوید.'
+        };
+      }
       return {
         ok: false,
         code: 'native_error',
@@ -557,6 +596,13 @@
       try {
         req = await withTimeout(C.requestPermissions(), 60000, 'permission_request');
       } catch (e) {
+        if (isNativeNotImplemented(e)) {
+          return {
+            ok: false,
+            code: 'native_not_implemented',
+            error: 'افزونه مخاطبین به‌صورت Native در این نسخه نصب‌شده ثبت نشده است. لطفاً از نصب آخرین نسخه برنامه مطمئن شوید.'
+          };
+        }
         return {
           ok: false,
           code: 'native_error',
@@ -587,6 +633,13 @@
         'read'
       );
     } catch (e) {
+      if (isNativeNotImplemented(e)) {
+        return {
+          ok: false,
+          code: 'native_not_implemented',
+          error: 'افزونه مخاطبین به‌صورت Native در این نسخه نصب‌شده ثبت نشده است. لطفاً از نصب آخرین نسخه برنامه مطمئن شوید.'
+        };
+      }
       return {
         ok: false,
         code: 'read_error',
@@ -606,6 +659,13 @@
       if (n) crmPhones[n] = true;
     });
 
+    // one candidate row per (contact, phone number) pair: a contact with several
+    // numbers offers several rows, since the CRM stores one phone per customer and
+    // the user decides per number whether it becomes its own CRM contact. Numbers
+    // are normalized before de-duplication so the same number in different
+    // formatting never produces two rows, and a re-import never re-offers a number
+    // already present in the CRM (existsInCrm) or already seen once in this same
+    // read (seen).
     var seen = {};
     var candidates = [];
 
@@ -618,22 +678,24 @@
           ? String(p.number || p.phoneNumber).trim()
           : '';
 
-        if (!number) return;
+        if (!number) return; // a contact with no number is never imported
 
         var key = normPhone(number);
         if (!key || seen[key]) return;
 
         seen[key] = true;
         candidates.push({
-          name: name || number,
+          name: name || number, // no name but has a number => the number is used as the label
           phone: number,
           existsInCrm: !!crmPhones[key]
         });
       });
     });
 
+    if (!candidates.length) return { ok: false, code: 'no_contacts', error: 'مخاطب دارای شماره در گوشی یافت نشد' };
+
     return { ok: true, contacts: candidates };
-  };
+  }
 
   CRMNative.createCalendarEvent = async function (appointment) {
     var Cal = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorCalendar;
