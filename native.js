@@ -103,6 +103,7 @@
     if (!LN || typeof LN.checkPermissions !== 'function') return 'unsupported';
     try {
       var st = await withTimeout(LN.checkPermissions(), CALL_TIMEOUT_MS, 'checkPermissions');
+      dbg('notif.checkPermissions ->', st);
       return (st && st.display) || 'prompt';
     } catch (e) {
       console.error('notif checkPermissions failed', e);
@@ -526,6 +527,16 @@
 
   var CRMNative = {};
 
+  // Diagnostic logging of the raw values returned by the native plugins.
+  function safeJson(v) { try { return JSON.stringify(v); } catch (e) { return String(v); } }
+  function dbg(label, value) { try { console.log('[CRM] ' + label + ' ' + safeJson(value)); } catch (e) { /* never throw from logging */ } }
+
+  // The documented permission answer of @capacitor-community/contacts 6.x is { contacts: <state> }.
+  // Returns that state string, or null when the answer does not have that shape.
+  function contactsPermState(res) {
+    return (res && typeof res.contacts === 'string') ? res.contacts : null;
+  }
+
   // A native Exception thrown by Capacitor's own registerPlugin() proxy (not by the
   // plugin's Android code) always carries code 'UNIMPLEMENTED' and a message of the
   // exact shape "<Plugin> plugin is not implemented on android" — this means the
@@ -562,9 +573,16 @@
       };
     }
 
+    // @capacitor-community/contacts 6.1.1: checkPermissions()/requestPermissions() resolve to
+    // { contacts: 'granted' | 'denied' | 'prompt' | 'prompt-with-rationale' }. The value is the
+    // state of ONE alias ("contacts" = READ_CONTACTS + WRITE_CONTACTS, see AndroidManifest.xml),
+    // so both permissions must be declared in the manifest for it to ever become 'granted'.
+    // The raw native answers are logged (logcat tag "Capacitor/Console") so the real value is
+    // always visible instead of guessed.
     var perm = null;
     try {
       perm = await withTimeout(C.checkPermissions(), 10000, 'permission_check');
+      dbg('contacts.checkPermissions ->', perm);
     } catch (e) {
       if (isNativeNotImplemented(e)) {
         return {
@@ -582,19 +600,29 @@
       };
     }
 
-    var state = perm && perm.contacts;
-    if (state !== 'granted') {
-      if (state === 'denied') {
-        return {
-          ok: false,
-          code: 'permission_permanent',
-          error: 'مجوز دسترسی به مخاطبین قبلاً رد شده و اندروید دیگر پنجره درخواست را نشان نمی‌دهد. از تنظیمات اندروید ← برنامه‌ها ← CRM ← مجوزها آن را فعال کنید.'
-        };
-      }
+    var state = contactsPermState(perm);
+    if (state === null) {
+      // The plugin answered, but not with the documented { contacts: <state> } shape. Say so
+      // (with the raw value) rather than mislabelling it as "denied".
+      return {
+        ok: false,
+        code: 'native_error',
+        error: 'پاسخ نامعتبر از بررسی مجوز مخاطبین: ' + safeJson(perm)
+      };
+    }
 
+    if (state !== 'granted') {
+      // A native 'denied' is NOT trusted as final before asking: Capacitor keeps its own
+      // remembered state for each Android permission and reports it while the permission is
+      // not granted, so it can be stale (for example after the manifest changed or after
+      // the user flipped the switch in Android Settings). requestPermissions() is safe to
+      // call in every non-granted state: when Android really will not show a dialog any
+      // more it resolves immediately with 'denied' and nothing is shown to the user. Only
+      // that answer is treated as "blocked, go to Settings".
       var req = null;
       try {
         req = await withTimeout(C.requestPermissions(), 60000, 'permission_request');
+        dbg('contacts.requestPermissions ->', req);
       } catch (e) {
         if (isNativeNotImplemented(e)) {
           return {
@@ -612,14 +640,31 @@
         };
       }
 
-      var reqState = req && req.contacts;
+      var reqState = contactsPermState(req);
       if (reqState !== 'granted') {
+        // authoritative second read straight from the native side before giving up
+        try {
+          var again = await withTimeout(C.checkPermissions(), 10000, 'permission_recheck');
+          dbg('contacts.checkPermissions (after request) ->', again);
+          var againState = contactsPermState(again);
+          if (againState === 'granted') reqState = 'granted';
+          else if (againState !== null && reqState === null) reqState = againState;
+        } catch (e) { /* keep the request result */ }
+      }
+      if (reqState !== 'granted') {
+        if (reqState === null) {
+          return {
+            ok: false,
+            code: 'native_error',
+            error: 'پاسخ نامعتبر از درخواست مجوز مخاطبین: ' + safeJson(req)
+          };
+        }
         var permanent = reqState === 'denied';
         return {
           ok: false,
           code: permanent ? 'permission_permanent' : 'permission_denied',
           error: permanent
-            ? 'مجوز دسترسی به مخاطبین رد شد. از تنظیمات اندروید ← برنامه‌ها ← CRM ← مجوزها آن را فعال کنید.'
+            ? 'مجوز دسترسی به مخاطبین قبلاً رد شده و اندروید دیگر پنجره درخواست را نشان نمی‌دهد. از تنظیمات اندروید ← برنامه‌ها ← CRM ← مجوزها آن را فعال کنید.'
             : 'مجوز دسترسی به مخاطبین داده نشد.'
         };
       }

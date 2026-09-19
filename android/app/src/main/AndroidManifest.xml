@@ -12,7 +12,15 @@
      it reminders still work but may arrive minutes late while the phone is idle. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- CONTACTS PERMISSION FIX: @capacitor-community/contacts 6.1.1 declares ONE Capacitor
+         permission alias "contacts" = READ_CONTACTS + WRITE_CONTACTS, and the alias is
+         "granted" only when BOTH are granted. With only READ_CONTACTS declared here,
+         WRITE_CONTACTS could never be granted, so checkPermissions()/requestPermissions()
+         kept returning contacts:"denied" even after the user enabled Contacts in Android
+         Settings. Both are in the same Android "Contacts" group: one system dialog / one
+         Settings switch covers both. The app itself only READS contacts. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

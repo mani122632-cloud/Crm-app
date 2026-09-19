@@ -19,6 +19,8 @@
 (function () {
   // ---- guard against re-running the automatic flow more than once per page visit ----
   var attemptMadeThisVisit = false;
+  // code of the last failed automatic attempt on the page currently shown (null = none / succeeded)
+  var lastFailCode = null;
 
   // ============ shared picker (search + multi-select + import) ============
   var CRMContactsImport = {};
@@ -80,20 +82,28 @@
   window.CRMContactsImport = CRMContactsImport;
 
   // ---- Persian banner for a failed automatic attempt (no crash, no generic text) ----
-  // Every code from CRMNative.pickDeviceContacts gets its own message; a retry
-  // button is offered unless the denial is permanent (Android will not show the
-  // system dialog again in that case, so retrying would silently do nothing).
+  // Every code from CRMNative.pickDeviceContacts gets its own message and a button that
+  // runs the whole check again (the permission is re-read from the native side each time).
   function showBanner(code, error) {
     var box = document.getElementById('contacts-denied-banner');
     if (!box) return;
     if (code === 'no_contacts') { box.innerHTML = ''; return; } // not an error worth a banner
-    var retryable = code !== 'permission_permanent';
+    // A permanent denial also gets a button: the permission state is re-read from the native
+    // side on every attempt, so after enabling Contacts in Android Settings the user can
+    // confirm it here (it also re-checks automatically when the app comes back to the front).
+    var permanent = code === 'permission_permanent';
     box.innerHTML = '<div class="card" style="border-color:var(--warning-border);background:var(--warning-bg)">' +
       '<b style="color:var(--warning)">' + esc(error || 'ورود خودکار مخاطبین ممکن نشد.') + '</b>' +
-      (retryable ? '<p class="muted" style="margin:.3rem 0 .6rem">برای تلاش دوباره دکمه زیر را بزنید.</p><button class="btn small" id="contacts-retry">تلاش مجدد</button>' : '') +
+      '<p class="muted" style="margin:.3rem 0 .6rem">' + (permanent ? 'پس از فعال‌سازی مجوز به برنامه برگردید یا دکمه زیر را بزنید.' : 'برای تلاش دوباره دکمه زیر را بزنید.') + '</p>' +
+      '<button class="btn small" id="contacts-retry">' + (permanent ? 'بررسی دوباره مجوز' : 'تلاش مجدد') + '</button>' +
       '</div>';
     var btn = document.getElementById('contacts-retry');
-    if (btn) btn.onclick = function () { attemptMadeThisVisit = false; runAutoImport(); };
+    if (btn) btn.onclick = function () {
+      attemptMadeThisVisit = false;
+      runAutoImport().catch(function (e) {
+        toast('بررسی مجوز مخاطبین با خطا متوقف شد: ' + (e && e.message ? e.message : 'نامشخص'), 'err');
+      });
+    };
   }
 
   // ---- the automatic import flow, run once on page entry ----
@@ -101,9 +111,12 @@
     if (!window.CRMNative || !CRMNative.isNative()) return; // browser: manual button already explains it
     if (attemptMadeThisVisit) return; // one shot per visit — no request loop
     attemptMadeThisVisit = true;
+    lastFailCode = null;
 
     var r = await CRMNative.pickDeviceContacts();
-    if (!r.ok) { showBanner(r.code, r.error); return; }
+    if (!r.ok) { lastFailCode = r.code; showBanner(r.code, r.error); return; }
+    var box = document.getElementById('contacts-denied-banner');
+    if (box) box.innerHTML = '';
 
     var list = r.contacts || [];
     var fresh = list.filter(function (c) { return !c.existsInCrm; });
@@ -114,6 +127,17 @@
     }
     CRMContactsImport.openPicker(fresh, existingCount);
   }
+
+  // Back from Android Settings (or any other app): when the page is showing a permission
+  // failure, read the real permission state again and continue if it is granted now.
+  document.addEventListener('crm:app-resume', function () {
+    if (lastFailCode !== 'permission_permanent' && lastFailCode !== 'permission_denied') return;
+    if (!document.getElementById('contacts-denied-banner')) return; // no longer on the Contacts page
+    attemptMadeThisVisit = false;
+    runAutoImport().catch(function (e) {
+      toast('بررسی دوباره مجوز مخاطبین با خطا متوقف شد: ' + (e && e.message ? e.message : 'نامشخص'), 'err');
+    });
+  });
 
   // ============ attach to the route lifecycle ============
   (function wrapContactsRoute() {
@@ -128,6 +152,7 @@
         if (add && add.parentNode) add.parentNode.insertBefore(wrap, add);
       }, 0);
       attemptMadeThisVisit = false;
+      lastFailCode = null;
       // run AFTER the page has rendered, so the banner placeholder exists and the
       // user sees the page before any system permission dialog can appear
       setTimeout(function () {
