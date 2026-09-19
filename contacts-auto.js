@@ -21,6 +21,8 @@
   var attemptMadeThisVisit = false;
   // code of the last failed automatic attempt on the page currently shown (null = none / succeeded)
   var lastFailCode = null;
+  // last banner shown on the Contacts page, re-drawn when the same page is re-rendered
+  var lastBanner = null;
 
   // ============ shared picker (search + multi-select + import) ============
   var CRMContactsImport = {};
@@ -54,7 +56,7 @@
           document.querySelectorAll('[data-dci]').forEach(function (cb) { if (cb.checked) chosen.push(fresh[Number(cb.dataset.dci)]); });
           if (!chosen.length) { showErr(new Error('هیچ مخاطبی انتخاب نشده است')); return; }
           guard($('#dci-go'), async function () {
-            var added = 0, dupBlocked = 0, failed = 0;
+            var added = 0, dupBlocked = 0, failed = 0, firstFail = '';
             for (var i = 0; i < chosen.length; i++) {
               var c = chosen[i];
               try {
@@ -66,13 +68,19 @@
                 await CustomerService.create({ name: c.name, phone: c.phone });
                 added++;
               } catch (e) {
-                if (String(e.message || '').indexOf('موجود') !== -1) dupBlocked++; else failed++;
+                if (String(e.message || '').indexOf('موجود') !== -1) dupBlocked++;
+                else { failed++; if (!firstFail) firstFail = (e && e.message) ? e.message : 'خطای نامشخص'; }
               }
+            }
+            // nothing was saved and something really failed: keep the picker open and say why
+            if (!added && failed) {
+              showErr(new Error(fmt(failed) + ' مورد ناموفق بود؛ علت: ' + firstFail));
+              return;
             }
             closeModal();
             var msg = fmt(added) + ' مخاطب به مشتریان افزوده شد';
             if (dupBlocked) msg += ' — ' + fmt(dupBlocked) + ' مورد تکراری بود و ایجاد نشد (شماره قبلاً در سامانه موجود است)';
-            if (failed) msg += ' — ' + fmt(failed) + ' مورد ناموفق';
+            if (failed) msg += ' — ' + fmt(failed) + ' مورد ناموفق (' + firstFail + ')';
             toast(msg, added ? 'ok' : 'warn');
             if (added) render();
           });
@@ -87,7 +95,6 @@
   function showBanner(code, error) {
     var box = document.getElementById('contacts-denied-banner');
     if (!box) return;
-    if (code === 'no_contacts') { box.innerHTML = ''; return; } // not an error worth a banner
     // A permanent denial also gets a button: the permission state is re-read from the native
     // side on every attempt, so after enabling Contacts in Android Settings the user can
     // confirm it here (it also re-checks automatically when the app comes back to the front).
@@ -97,6 +104,11 @@
       '<p class="muted" style="margin:.3rem 0 .6rem">' + (permanent ? 'پس از فعال‌سازی مجوز به برنامه برگردید یا دکمه زیر را بزنید.' : 'برای تلاش دوباره دکمه زیر را بزنید.') + '</p>' +
       '<button class="btn small" id="contacts-retry">' + (permanent ? 'بررسی دوباره مجوز' : 'تلاش مجدد') + '</button>' +
       '</div>';
+    lastBanner = { code: code, error: error };
+    bindRetry();
+  }
+
+  function bindRetry() {
     var btn = document.getElementById('contacts-retry');
     if (btn) btn.onclick = function () {
       attemptMadeThisVisit = false;
@@ -114,7 +126,10 @@
     lastFailCode = null;
 
     var r = await CRMNative.pickDeviceContacts();
+    // the manual button (customer360.js) shows its own result for the same read
+    if (CRMContactsImport.manualBusy) return;
     if (!r.ok) { lastFailCode = r.code; showBanner(r.code, r.error); return; }
+    lastBanner = null;
     var box = document.getElementById('contacts-denied-banner');
     if (box) box.innerHTML = '';
 
@@ -143,6 +158,11 @@
   (function wrapContactsRoute() {
     var orig = Routes.contacts;
     Routes.contacts = async function () {
+      // Routes.contacts runs BEFORE the page DOM is replaced, so a banner placeholder that is
+      // still in the document means this is a re-render of the page already on screen (search
+      // typing, render() after an import), not a new visit. A re-render must not re-read the
+      // whole phone book and re-open the picker.
+      var sameVisit = !!document.getElementById('contacts-denied-banner');
       var html = await orig();
       // placeholder banner container (filled only when the automatic attempt fails)
       setTimeout(function () {
@@ -150,9 +170,12 @@
         wrap.id = 'contacts-denied-banner';
         var add = document.getElementById('add-ct');
         if (add && add.parentNode) add.parentNode.insertBefore(wrap, add);
+        if (sameVisit && lastBanner) showBanner(lastBanner.code, lastBanner.error);
       }, 0);
+      if (sameVisit) return html;
       attemptMadeThisVisit = false;
       lastFailCode = null;
+      lastBanner = null;
       // run AFTER the page has rendered, so the banner placeholder exists and the
       // user sees the page before any system permission dialog can appear
       setTimeout(function () {

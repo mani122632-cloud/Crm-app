@@ -531,6 +531,24 @@
   function safeJson(v) { try { return JSON.stringify(v); } catch (e) { return String(v); } }
   function dbg(label, value) { try { console.log('[CRM] ' + label + ' ' + safeJson(value)); } catch (e) { /* never throw from logging */ } }
 
+  var READ_TIMEOUT_MS = 60000;
+
+  // Normalizes a device phone number to the character set the CRM validator (V.phone in
+  // services.js: digits + - ( ) space, 5-20 chars) accepts: Persian / Arabic-Indic digits
+  // become ASCII digits and invisible bidi marks / non-breaking spaces are dropped.
+  // Returns '' when the number still is not a plausible phone number (letters, too short/long).
+  function cleanPhone(v) {
+    var s = String(v == null ? '' : v)
+      .replace(/[\u06F0-\u06F9]/g, function (d) { return String(d.charCodeAt(0) - 0x06F0); })
+      .replace(/[\u0660-\u0669]/g, function (d) { return String(d.charCodeAt(0) - 0x0660); })
+      .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u00A0]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!/^[0-9+\-\s()]+$/.test(s)) return '';
+    if (s.length < 5 || s.length > 20) return '';
+    return s;
+  }
+
   // The documented permission answer of @capacitor-community/contacts 6.x is { contacts: <state> }.
   // Returns that state string, or null when the answer does not have that shape.
   function contactsPermState(res) {
@@ -670,14 +688,18 @@
       }
     }
 
+    // Reading can be slow on Android (the plugin queries every contact separately), so this
+    // waits longer than a normal call. A timeout is reported as its own, visible error.
     var result = null;
+    var t0 = Date.now();
     try {
       result = await withTimeout(
         C.getContacts({ projection: { name: true, phones: true } }),
-        30000,
+        READ_TIMEOUT_MS,
         'read'
       );
     } catch (e) {
+      dbg('contacts.getContacts failed after ms', Date.now() - t0);
       if (isNativeNotImplemented(e)) {
         return {
           ok: false,
@@ -689,15 +711,40 @@
         ok: false,
         code: 'read_error',
         error: isTimeout(e)
-          ? 'خواندن مخاطبین بیش از حد طول کشید؛ دوباره تلاش کنید'
+          ? 'خواندن مخاطبین بیش از حد طول کشید (بیش از ' + Math.round(READ_TIMEOUT_MS / 1000) + ' ثانیه)؛ دوباره تلاش کنید'
           : 'خواندن مخاطبین ناموفق بود: ' + (e && e.message ? e.message : 'خطای ناشناخته')
       };
     }
 
-    var contacts = (result && result.contacts) || [];
+    // 6.x answers { contacts: Contact[] }. Anything else is a read error, NOT "no contacts":
+    // an unexpected shape must never look like an empty phone book.
+    if (!result || !Array.isArray(result.contacts)) {
+      return {
+        ok: false,
+        code: 'read_error',
+        error: 'پاسخ نامعتبر از خواندن مخاطبین (ساختار result.contacts یافت نشد): ' + safeJson(result).slice(0, 200)
+      };
+    }
+    var contacts = result.contacts;
+    // counts and key names only (no names / numbers) are logged
+    dbg('contacts.getContacts ->', {
+      count: contacts.length,
+      ms: Date.now() - t0,
+      firstKeys: contacts[0] && typeof contacts[0] === 'object' ? Object.keys(contacts[0]) : null,
+      firstPhoneKeys: contacts[0] && contacts[0].phones && contacts[0].phones[0] && typeof contacts[0].phones[0] === 'object' ? Object.keys(contacts[0].phones[0]) : null
+    });
     if (!contacts.length) return { ok: false, code: 'no_contacts', error: 'مخاطبی در گوشی یافت نشد' };
 
-    var customers = await Repo.list('customers');
+    var customers;
+    try {
+      customers = await Repo.list('customers');
+    } catch (e) {
+      return {
+        ok: false,
+        code: 'database_error',
+        error: 'خواندن مشتریان موجود برای جلوگیری از تکرار ناموفق بود: ' + (e && e.message ? e.message : 'خطای ناشناخته')
+      };
+    }
     var crmPhones = {};
     customers.forEach(function (c) {
       var n = normPhone(c.phone);
@@ -713,33 +760,55 @@
     // read (seen).
     var seen = {};
     var candidates = [];
+    var stats = { contacts: contacts.length, withoutNumber: 0, invalidNumber: 0, mappingErrors: 0 };
+    var firstMappingError = '';
 
     contacts.forEach(function (ct) {
-      var name = contactName(ct && ct.name);
-      var phones = (ct && ct.phones) || [];
+      try {
+        var name = contactName(ct && ct.name);
+        var phones = (ct && (ct.phones || ct.phoneNumbers)) || [];
+        if (!Array.isArray(phones)) phones = [];
+        if (!phones.length) { stats.withoutNumber++; return; } // a contact with no number is never imported
 
-      phones.forEach(function (p) {
-        var number = p && (p.number || p.phoneNumber)
-          ? String(p.number || p.phoneNumber).trim()
-          : '';
+        phones.forEach(function (p) {
+          var raw = (p && typeof p === 'object') ? (p.number || p.phoneNumber) : p;
+          if (raw == null || String(raw).trim() === '') { stats.withoutNumber++; return; }
 
-        if (!number) return; // a contact with no number is never imported
+          // digits of any script / bidi marks are normalized to what the CRM validator accepts
+          var number = cleanPhone(raw);
+          if (!number) { stats.invalidNumber++; return; }
 
-        var key = normPhone(number);
-        if (!key || seen[key]) return;
+          var key = normPhone(number);
+          if (!key || seen[key]) return;
 
-        seen[key] = true;
-        candidates.push({
-          name: name || number, // no name but has a number => the number is used as the label
-          phone: number,
-          existsInCrm: !!crmPhones[key]
+          seen[key] = true;
+          candidates.push({
+            name: name || number, // no name but has a number => the number is used as the label
+            phone: number,
+            existsInCrm: !!crmPhones[key]
+          });
         });
-      });
+      } catch (e) {
+        stats.mappingErrors++;
+        if (!firstMappingError) firstMappingError = e && e.message ? e.message : 'خطای نامشخص';
+      }
     });
+    dbg('contacts.mapping ->', { candidates: candidates.length, stats: stats });
 
-    if (!candidates.length) return { ok: false, code: 'no_contacts', error: 'مخاطب دارای شماره در گوشی یافت نشد' };
+    if (!candidates.length) {
+      if (stats.mappingErrors) {
+        return { ok: false, code: 'mapping_error', error: 'پردازش مخاطبین خوانده‌شده ناموفق بود: ' + firstMappingError };
+      }
+      return {
+        ok: false,
+        code: 'no_contacts',
+        error: stats.invalidNumber
+          ? 'مخاطب دارای شماره معتبر در گوشی یافت نشد (' + stats.invalidNumber + ' شماره نامعتبر نادیده گرفته شد)'
+          : 'مخاطب دارای شماره در گوشی یافت نشد'
+      };
+    }
 
-    return { ok: true, contacts: candidates };
+    return { ok: true, contacts: candidates, stats: stats };
   }
 
   CRMNative.createCalendarEvent = async function (appointment) {

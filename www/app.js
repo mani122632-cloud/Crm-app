@@ -1629,16 +1629,34 @@ Routes.reports = async function () {
   setTimeout(bindGoToday, 0);
   return h;
 };
+// Badge for the notification "وضعیت Permission" row. Input is the normalized state used
+// everywhere else: 'granted' | 'denied' | 'prompt' | 'unsupported' | 'error'.
+// 'unsupported' means only "no notification API at all" (neither native plugin nor browser).
+function notifPermBadge(st) {
+  return st === 'granted' ? badge('فعال', 'ok')
+    : st === 'denied' ? badge('رد شده', 'danger')
+    : st === 'unsupported' ? badge('پشتیبانی نمی‌شود', 'warn')
+    : st === 'error' ? badge('بررسی ناموفق بود', 'danger')
+    : badge('تعیین نشده');
+}
 Routes.settings = async function () {
   const s = await Repo.getSettings();
-  const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  // The Web Notification API does not exist inside the Android WebView, so testing
+  // 'Notification' in window reported "unsupported" even while the native permission was
+  // granted. The real state comes from CRMNative.notifStatus() (backed by
+  // @capacitor/local-notifications on Android, by the Web API in a browser).
+  let perm = 'unsupported';
+  try {
+    if (window.CRMNative && typeof CRMNative.notifStatus === 'function') perm = await CRMNative.notifStatus();
+    else if ('Notification' in window) perm = Notification.permission === 'default' ? 'prompt' : Notification.permission;
+  } catch (e) { perm = 'error'; }
   let h = secTitle('تنظیمات عمومی') + '<div class="card">' +
     field('روزهای بدون فعالیت برای «خوابیده»', '<input id="st-inact" type="number" min="1" step="1" value="' + esc(s.inactivityDays) + '">') +
     field('درصد مالیات پیش‌فرض', '<input id="st-tax" type="number" min="0" max="100" step="any" value="' + esc(s.taxDefault) + '">') +
     '<button class="btn btn-block" id="st-save">ذخیره تنظیمات</button></div>';
   h += secTitle('اعلان‌ها') + '<div class="card">' +
-    '<div class="list-item"><span class="muted">وضعیت Permission</span><span>' +
-    (perm === 'granted' ? badge('فعال', 'ok') : perm === 'denied' ? badge('رد شده', 'danger') : perm === 'unsupported' ? badge('پشتیبانی نمی‌شود', 'warn') : badge('تعیین نشده')) + '</span></div>' +
+    '<div class="list-item"><span class="muted">وضعیت Permission</span><span id="st-notif-perm">' +
+    notifPermBadge(perm) + '</span></div>' +
     '<button class="btn btn-block" id="st-notif">فعال‌سازی اعلان‌ها</button>' +
     '<p class="muted">یادآوری‌ها برای پیگیری، کار و قرار زمان‌بندی می‌شوند. در نسخه Android، اعلان‌ها به‌صورت Native نمایش داده می‌شوند.</p></div>';
   h += secTitle('پشتیبان‌گیری و داده') + '<div class="card">' +

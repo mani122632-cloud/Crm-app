@@ -103,6 +103,7 @@
     if (!LN || typeof LN.checkPermissions !== 'function') return 'unsupported';
     try {
       var st = await withTimeout(LN.checkPermissions(), CALL_TIMEOUT_MS, 'checkPermissions');
+      dbg('notif.checkPermissions ->', st);
       return (st && st.display) || 'prompt';
     } catch (e) {
       console.error('notif checkPermissions failed', e);
@@ -526,6 +527,34 @@
 
   var CRMNative = {};
 
+  // Diagnostic logging of the raw values returned by the native plugins.
+  function safeJson(v) { try { return JSON.stringify(v); } catch (e) { return String(v); } }
+  function dbg(label, value) { try { console.log('[CRM] ' + label + ' ' + safeJson(value)); } catch (e) { /* never throw from logging */ } }
+
+  var READ_TIMEOUT_MS = 60000;
+
+  // Normalizes a device phone number to the character set the CRM validator (V.phone in
+  // services.js: digits + - ( ) space, 5-20 chars) accepts: Persian / Arabic-Indic digits
+  // become ASCII digits and invisible bidi marks / non-breaking spaces are dropped.
+  // Returns '' when the number still is not a plausible phone number (letters, too short/long).
+  function cleanPhone(v) {
+    var s = String(v == null ? '' : v)
+      .replace(/[\u06F0-\u06F9]/g, function (d) { return String(d.charCodeAt(0) - 0x06F0); })
+      .replace(/[\u0660-\u0669]/g, function (d) { return String(d.charCodeAt(0) - 0x0660); })
+      .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u00A0]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!/^[0-9+\-\s()]+$/.test(s)) return '';
+    if (s.length < 5 || s.length > 20) return '';
+    return s;
+  }
+
+  // The documented permission answer of @capacitor-community/contacts 6.x is { contacts: <state> }.
+  // Returns that state string, or null when the answer does not have that shape.
+  function contactsPermState(res) {
+    return (res && typeof res.contacts === 'string') ? res.contacts : null;
+  }
+
   // A native Exception thrown by Capacitor's own registerPlugin() proxy (not by the
   // plugin's Android code) always carries code 'UNIMPLEMENTED' and a message of the
   // exact shape "<Plugin> plugin is not implemented on android" — this means the
@@ -562,9 +591,16 @@
       };
     }
 
+    // @capacitor-community/contacts 6.1.1: checkPermissions()/requestPermissions() resolve to
+    // { contacts: 'granted' | 'denied' | 'prompt' | 'prompt-with-rationale' }. The value is the
+    // state of ONE alias ("contacts" = READ_CONTACTS + WRITE_CONTACTS, see AndroidManifest.xml),
+    // so both permissions must be declared in the manifest for it to ever become 'granted'.
+    // The raw native answers are logged (logcat tag "Capacitor/Console") so the real value is
+    // always visible instead of guessed.
     var perm = null;
     try {
       perm = await withTimeout(C.checkPermissions(), 10000, 'permission_check');
+      dbg('contacts.checkPermissions ->', perm);
     } catch (e) {
       if (isNativeNotImplemented(e)) {
         return {
@@ -582,19 +618,29 @@
       };
     }
 
-    var state = perm && perm.contacts;
-    if (state !== 'granted') {
-      if (state === 'denied') {
-        return {
-          ok: false,
-          code: 'permission_permanent',
-          error: 'مجوز دسترسی به مخاطبین قبلاً رد شده و اندروید دیگر پنجره درخواست را نشان نمی‌دهد. از تنظیمات اندروید ← برنامه‌ها ← CRM ← مجوزها آن را فعال کنید.'
-        };
-      }
+    var state = contactsPermState(perm);
+    if (state === null) {
+      // The plugin answered, but not with the documented { contacts: <state> } shape. Say so
+      // (with the raw value) rather than mislabelling it as "denied".
+      return {
+        ok: false,
+        code: 'native_error',
+        error: 'پاسخ نامعتبر از بررسی مجوز مخاطبین: ' + safeJson(perm)
+      };
+    }
 
+    if (state !== 'granted') {
+      // A native 'denied' is NOT trusted as final before asking: Capacitor keeps its own
+      // remembered state for each Android permission and reports it while the permission is
+      // not granted, so it can be stale (for example after the manifest changed or after
+      // the user flipped the switch in Android Settings). requestPermissions() is safe to
+      // call in every non-granted state: when Android really will not show a dialog any
+      // more it resolves immediately with 'denied' and nothing is shown to the user. Only
+      // that answer is treated as "blocked, go to Settings".
       var req = null;
       try {
         req = await withTimeout(C.requestPermissions(), 60000, 'permission_request');
+        dbg('contacts.requestPermissions ->', req);
       } catch (e) {
         if (isNativeNotImplemented(e)) {
           return {
@@ -612,27 +658,48 @@
         };
       }
 
-      var reqState = req && req.contacts;
+      var reqState = contactsPermState(req);
       if (reqState !== 'granted') {
+        // authoritative second read straight from the native side before giving up
+        try {
+          var again = await withTimeout(C.checkPermissions(), 10000, 'permission_recheck');
+          dbg('contacts.checkPermissions (after request) ->', again);
+          var againState = contactsPermState(again);
+          if (againState === 'granted') reqState = 'granted';
+          else if (againState !== null && reqState === null) reqState = againState;
+        } catch (e) { /* keep the request result */ }
+      }
+      if (reqState !== 'granted') {
+        if (reqState === null) {
+          return {
+            ok: false,
+            code: 'native_error',
+            error: 'پاسخ نامعتبر از درخواست مجوز مخاطبین: ' + safeJson(req)
+          };
+        }
         var permanent = reqState === 'denied';
         return {
           ok: false,
           code: permanent ? 'permission_permanent' : 'permission_denied',
           error: permanent
-            ? 'مجوز دسترسی به مخاطبین رد شد. از تنظیمات اندروید ← برنامه‌ها ← CRM ← مجوزها آن را فعال کنید.'
+            ? 'مجوز دسترسی به مخاطبین قبلاً رد شده و اندروید دیگر پنجره درخواست را نشان نمی‌دهد. از تنظیمات اندروید ← برنامه‌ها ← CRM ← مجوزها آن را فعال کنید.'
             : 'مجوز دسترسی به مخاطبین داده نشد.'
         };
       }
     }
 
+    // Reading can be slow on Android (the plugin queries every contact separately), so this
+    // waits longer than a normal call. A timeout is reported as its own, visible error.
     var result = null;
+    var t0 = Date.now();
     try {
       result = await withTimeout(
         C.getContacts({ projection: { name: true, phones: true } }),
-        30000,
+        READ_TIMEOUT_MS,
         'read'
       );
     } catch (e) {
+      dbg('contacts.getContacts failed after ms', Date.now() - t0);
       if (isNativeNotImplemented(e)) {
         return {
           ok: false,
@@ -644,15 +711,40 @@
         ok: false,
         code: 'read_error',
         error: isTimeout(e)
-          ? 'خواندن مخاطبین بیش از حد طول کشید؛ دوباره تلاش کنید'
+          ? 'خواندن مخاطبین بیش از حد طول کشید (بیش از ' + Math.round(READ_TIMEOUT_MS / 1000) + ' ثانیه)؛ دوباره تلاش کنید'
           : 'خواندن مخاطبین ناموفق بود: ' + (e && e.message ? e.message : 'خطای ناشناخته')
       };
     }
 
-    var contacts = (result && result.contacts) || [];
+    // 6.x answers { contacts: Contact[] }. Anything else is a read error, NOT "no contacts":
+    // an unexpected shape must never look like an empty phone book.
+    if (!result || !Array.isArray(result.contacts)) {
+      return {
+        ok: false,
+        code: 'read_error',
+        error: 'پاسخ نامعتبر از خواندن مخاطبین (ساختار result.contacts یافت نشد): ' + safeJson(result).slice(0, 200)
+      };
+    }
+    var contacts = result.contacts;
+    // counts and key names only (no names / numbers) are logged
+    dbg('contacts.getContacts ->', {
+      count: contacts.length,
+      ms: Date.now() - t0,
+      firstKeys: contacts[0] && typeof contacts[0] === 'object' ? Object.keys(contacts[0]) : null,
+      firstPhoneKeys: contacts[0] && contacts[0].phones && contacts[0].phones[0] && typeof contacts[0].phones[0] === 'object' ? Object.keys(contacts[0].phones[0]) : null
+    });
     if (!contacts.length) return { ok: false, code: 'no_contacts', error: 'مخاطبی در گوشی یافت نشد' };
 
-    var customers = await Repo.list('customers');
+    var customers;
+    try {
+      customers = await Repo.list('customers');
+    } catch (e) {
+      return {
+        ok: false,
+        code: 'database_error',
+        error: 'خواندن مشتریان موجود برای جلوگیری از تکرار ناموفق بود: ' + (e && e.message ? e.message : 'خطای ناشناخته')
+      };
+    }
     var crmPhones = {};
     customers.forEach(function (c) {
       var n = normPhone(c.phone);
@@ -668,33 +760,55 @@
     // read (seen).
     var seen = {};
     var candidates = [];
+    var stats = { contacts: contacts.length, withoutNumber: 0, invalidNumber: 0, mappingErrors: 0 };
+    var firstMappingError = '';
 
     contacts.forEach(function (ct) {
-      var name = contactName(ct && ct.name);
-      var phones = (ct && ct.phones) || [];
+      try {
+        var name = contactName(ct && ct.name);
+        var phones = (ct && (ct.phones || ct.phoneNumbers)) || [];
+        if (!Array.isArray(phones)) phones = [];
+        if (!phones.length) { stats.withoutNumber++; return; } // a contact with no number is never imported
 
-      phones.forEach(function (p) {
-        var number = p && (p.number || p.phoneNumber)
-          ? String(p.number || p.phoneNumber).trim()
-          : '';
+        phones.forEach(function (p) {
+          var raw = (p && typeof p === 'object') ? (p.number || p.phoneNumber) : p;
+          if (raw == null || String(raw).trim() === '') { stats.withoutNumber++; return; }
 
-        if (!number) return; // a contact with no number is never imported
+          // digits of any script / bidi marks are normalized to what the CRM validator accepts
+          var number = cleanPhone(raw);
+          if (!number) { stats.invalidNumber++; return; }
 
-        var key = normPhone(number);
-        if (!key || seen[key]) return;
+          var key = normPhone(number);
+          if (!key || seen[key]) return;
 
-        seen[key] = true;
-        candidates.push({
-          name: name || number, // no name but has a number => the number is used as the label
-          phone: number,
-          existsInCrm: !!crmPhones[key]
+          seen[key] = true;
+          candidates.push({
+            name: name || number, // no name but has a number => the number is used as the label
+            phone: number,
+            existsInCrm: !!crmPhones[key]
+          });
         });
-      });
+      } catch (e) {
+        stats.mappingErrors++;
+        if (!firstMappingError) firstMappingError = e && e.message ? e.message : 'خطای نامشخص';
+      }
     });
+    dbg('contacts.mapping ->', { candidates: candidates.length, stats: stats });
 
-    if (!candidates.length) return { ok: false, code: 'no_contacts', error: 'مخاطب دارای شماره در گوشی یافت نشد' };
+    if (!candidates.length) {
+      if (stats.mappingErrors) {
+        return { ok: false, code: 'mapping_error', error: 'پردازش مخاطبین خوانده‌شده ناموفق بود: ' + firstMappingError };
+      }
+      return {
+        ok: false,
+        code: 'no_contacts',
+        error: stats.invalidNumber
+          ? 'مخاطب دارای شماره معتبر در گوشی یافت نشد (' + stats.invalidNumber + ' شماره نامعتبر نادیده گرفته شد)'
+          : 'مخاطب دارای شماره در گوشی یافت نشد'
+      };
+    }
 
-    return { ok: true, contacts: candidates };
+    return { ok: true, contacts: candidates, stats: stats };
   }
 
   CRMNative.createCalendarEvent = async function (appointment) {

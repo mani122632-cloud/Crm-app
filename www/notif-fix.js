@@ -5,7 +5,7 @@
 // Safety: every path releases the button (success, denied, error, timeout); no promise is
 // left without a catch; the status refreshes when the app returns from Android settings.
 // Additive only — reuses existing CSS classes (badge, btn, muted), no new styles.
-/* global Routes, $, badge, toast, CRMNative */
+/* global Routes, $, badge, toast, CRMNative, notifPermBadge */
 
 (function wrapSettingsNotifStatus() {
   const orig = Routes.settings;
@@ -58,6 +58,9 @@
         : 'پشتیبانی نمی‌شود';
       const cls = st === 'granted' ? 'ok' : st === 'denied' || st === 'error' ? 'danger' : st === 'prompt' ? 'warn' : '';
       statusEl.innerHTML = '<span class="muted">وضعیت مجوز اعلان‌ها (واقعی):</span> ' + badge(label, cls);
+      // keep the "وضعیت Permission" row of the settings page (app.js) on the same real state
+      const permEl = document.getElementById('st-notif-perm');
+      if (permEl && typeof notifPermBadge === 'function') permEl.innerHTML = notifPermBadge(st);
       btn.textContent = st === 'granted' ? 'اعلان‌ها فعال است'
         : st === 'denied' ? 'بررسی دوباره وضعیت'
         : st === 'error' ? 'تلاش دوباره'

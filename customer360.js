@@ -191,7 +191,13 @@ function openDeviceContactsImport() {
       function () { $('#dci-close').onclick = closeModal; });
     return;
   }
-  modal('ورود از مخاطبین گوشی', '<div class="page-loading">در حال خواندن مخاطبین گوشی…</div>');
+  modal('ورود از مخاطبین گوشی', '<div class="page-loading" id="dci-loading">در حال خواندن مخاطبین گوشی…</div>');
+  // While this manual flow owns the screen, the automatic flow of the Contacts page
+  // (contacts-auto.js) must not open its own picker or banner from the same shared read:
+  // two flows finishing on one result used to close each other's modal.
+  var CI = window.CRMContactsImport || (window.CRMContactsImport = {});
+  CI.manualBusy = true;
+  const myToken = CI.manualToken = (CI.manualToken || 0) + 1; // a newer tap takes over the screen
   // The step runs directly here (own try/catch), not via guard(btn, fn), because
   // there is no real button element while this loading modal is open — guard()
   // would silently do nothing with a falsy target and the modal would spin forever.
@@ -200,17 +206,29 @@ function openDeviceContactsImport() {
     try {
       r = await CRMNative.pickDeviceContacts();
     } catch (e) {
-      closeModal();
-      toast('خطای غیرمنتظره: ' + (e && e.message ? e.message : 'نامشخص'), 'err');
-      return;
+      r = { ok: false, code: 'native_error', error: 'خطای غیرمنتظره هنگام خواندن مخاطبین: ' + (e && e.message ? e.message : 'نامشخص') };
+    } finally {
+      if (myToken === CI.manualToken) CI.manualBusy = false;
     }
-    closeModal();
-    if (!r.ok) { toast(r.error, 'err'); return; }
+    if (myToken !== CI.manualToken) return; // superseded by a newer tap
+    // the user closed the loading modal (or another modal replaced it): nothing to update
+    const loading = document.getElementById('dci-loading');
+    if (!loading) return;
+    // Errors are shown INSIDE the same modal and stay until the user closes it — they are
+    // never a toast that disappears in a few seconds.
+    const fail = function (text) {
+      loading.parentNode.innerHTML = '<div class="card" style="border-color:var(--warning-border);background:var(--warning-bg)">' +
+        '<b style="color:var(--warning)">' + esc(text) + '</b></div>';
+    };
+    if (!r.ok) { fail(r.error || 'ورود مخاطبین ممکن نشد.'); return; }
     const list = r.contacts || [];
-    if (!list.length) { toast('مخاطب قابل ورود یافت نشد', 'warn'); return; }
+    if (!list.length) { fail('مخاطبی در گوشی یافت نشد'); return; }
     const fresh = list.filter(c => !c.existsInCrm);
     const existing = list.length - fresh.length;
-    if (!fresh.length) { toast('همه ' + fmt(list.length) + ' مخاطب گوشی از قبل در سامانه موجودند', 'info'); return; }
+    // closeModal(true) = immediate. The animated closeModal() clears #modal-root 170ms later,
+    // which erased the picker opened right after it: loading, then nothing, and no error.
+    if (!fresh.length) { closeModal(true); toast('همه ' + fmt(list.length) + ' مخاطب گوشی از قبل در سامانه موجودند', 'info'); return; }
+    closeModal(true);
     window.CRMContactsImport.openPicker(fresh, existing);
   })();
 }
