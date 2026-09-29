@@ -5,7 +5,7 @@
 // searchable multi-select picker. No service, DB schema or native.js change.
 /* global Routes, Repo, DB, CustomerService, CRMNative, num, Dates, $, app, fmt, esc, dateFa, dateTimeFa,
    enterCls, toast, modal, closeModal, confirmDlg, errMsg, badge, val, secTitle, secList, guard, navigate,
-   render, showErr, customerOptions, Repo */
+   render, showErr, customerOptions, Repo, AIService */
 
 // ============ PART A: Customer 360 ============
 (function replaceCustomerRoute() {
@@ -70,6 +70,13 @@
       '<button class="btn small secondary" id="c3-arch">' + (c.archived ? 'خروج از آرشیو' : 'آرشیو') + '</button>' +
       '<button class="btn small danger" id="c3-del">حذف دائمی</button></div>';
 
+    // AI-powered customer summary — wired to the existing AIService.summarizeCustomer(id)
+    h += '<div class="card" id="c3-ai-card">' +
+      '<div class="section-title">خلاصه هوشمند (هوش مصنوعی)</div>' +
+      '<button class="btn small" id="c3-ai-btn">دریافت خلاصه</button>' +
+      '<div id="c3-ai-result" style="margin-top:.6rem"></div>' +
+      '</div>';
+
     h += secList('سرنخ‌های فروش مرتبط', d.leads, x => '<div class="list-item"><div><b>' + esc(x.name) + '</b><br><span class="muted">' + esc(x.phone || '') + (x.source ? ' — منبع: ' + esc(x.source) : '') + '</span></div>' + badge(x.customerId ? 'تبدیل‌شده' : 'باز', x.customerId ? 'info' : '') + '</div>');
     h += secList('فرصت‌های فروش', d.deals, x => '<div class="list-item" data-nav="deal/' + x.id + '"><div><b>' + esc(x.title) + '</b><br><span class="muted">' + (x.status === 'won' ? 'برده‌شده' : x.status === 'lost' ? 'باخته' : 'باز') + (x.expectedCloseDate ? ' — فروش مورد انتظار: ' + dateFa(x.expectedCloseDate) : '') + '</span></div><span class="muted"><b>' + fmt(x.value) + '</b></span></div>');
     h += secList('سفارش‌ها', d.orders, o => '<div class="list-item" data-nav="order/' + o.id + '"><div><b>' + esc(o.number) + '</b><br><span class="muted">' + esc(o.status) + ' — ' + dateFa(o.createdAt) + '</span></div><span class="muted"><b>' + fmt(o.total) + '</b></span></div>');
@@ -81,7 +88,7 @@
     if (cfFields.length) h += secTitle('فیلدهای سفارشی') + '<div class="card">' +
       cfFields.map(f => '<div class="list-item"><span>' + esc(f.label) + '</span><span class="muted">' + esc(f.type === 'boolean' ? (cfMap[f.id] === true ? 'بله' : cfMap[f.id] === false ? 'خیر' : '—') : Array.isArray(cfMap[f.id]) ? cfMap[f.id].join('، ') : (cfMap[f.id] == null ? '—' : cfMap[f.id])) + '</span></div>').join('') + '</div>';
 
-    h += secTitle('خط زمانی (Timeline)', timeline.length) + '<div class="card">' +
+    h += secTitle('خط زمانی (خط زمانی)', timeline.length) + '<div class="card">' +
       (timeline.length ? timeline.slice(0, 60).map(t =>
         '<div class="timeline-item"' + (t.nav ? ' data-nav="' + t.nav + '" style="cursor:pointer"' : '') + '><b>' + esc(t.label) + '</b> — ' + esc(t.text) +
         '<br><span class="muted">' + dateTimeFa(t.at) + '</span></div>').join('') : '<div class="muted">فعالیتی ثبت نشده است</div>') + '</div>';
@@ -101,6 +108,24 @@
         var el = $('[id^="att-customer-"]');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       };
+      var aiBtn = $('#c3-ai-btn');
+      if (aiBtn) aiBtn.onclick = function () {
+        guard(aiBtn, async function () {
+          var box = $('#c3-ai-result');
+          if (box) box.innerHTML = '<div class="muted">در حال دریافت خلاصه…</div>';
+          if (typeof AIService === 'undefined' || !AIService.summarizeCustomer) {
+            if (box) box.innerHTML = '<div class="error-text">قابلیت خلاصه هوشمند در دسترس نیست.</div>';
+            return;
+          }
+          var res = await AIService.summarizeCustomer(id);
+          if (!box) return;
+          if (res && res.ok && res.text) {
+            box.innerHTML = '<div>' + esc(res.text).replace(/\n/g, '<br>') + '</div>';
+          } else {
+            box.innerHTML = '<div class="error-text">' + esc(c3AiErrorMessage(res && res.error)) + '</div>';
+          }
+        });
+      };
       $('#c3-edit').onclick = function () { openCustomerForm(c); };
       $('#c3-lead').onclick = function () { guard($('#c3-lead'), async function () { await CustomerService.convertToLead(id, {}); toast('سرنخ فروش ایجاد شد', 'ok'); render(id); }); };
       $('#c3-arch').onclick = function () { guard($('#c3-arch'), async function () { await CustomerService.archive(id, !c.archived); toast(c.archived ? 'از آرشیو خارج شد' : 'آرشیو شد', 'ok'); render(id); }); };
@@ -113,6 +138,26 @@
     return h;
   };
 })();
+
+// Maps AIGateway/AIService error codes to a short, user-facing Persian message
+// for the "خلاصه هوشمند (AI)" card. Purely presentational — does not add any
+// new AI capability or touch the gateway itself.
+function c3AiErrorMessage(code) {
+  var map = {
+    AI_DISABLED: 'قابلیت هوش مصنوعی در حال حاضر غیرفعال است.',
+    GATEWAY_NOT_CONFIGURED: 'اتصال به سرویس هوش مصنوعی هنوز تنظیم نشده است.',
+    TIMEOUT: 'دریافت خلاصه بیش از حد طول کشید. دوباره تلاش کنید.',
+    NETWORK_ERROR: 'ارتباط با سرور برقرار نشد. اتصال اینترنت را بررسی کنید.',
+    UNAUTHORIZED: 'دسترسی به سرویس هوش مصنوعی مجاز نیست.',
+    FORBIDDEN: 'دسترسی به سرویس هوش مصنوعی مجاز نیست.',
+    INVALID_REQUEST: 'درخواست نامعتبر بود.',
+    RATE_LIMIT: 'تعداد درخواست‌ها زیاد بوده است. کمی بعد دوباره تلاش کنید.',
+    EMPTY_RESPONSE: 'پاسخی از سرویس هوش مصنوعی دریافت نشد.',
+    INVALID_RESPONSE: 'پاسخ نامعتبر از سرویس هوش مصنوعی دریافت شد.',
+    UPSTREAM_ERROR: 'سرویس هوش مصنوعی موقتاً در دسترس نیست.',
+  };
+  return (code && map[code]) || 'دریافت خلاصه با خطا مواجه شد. دوباره تلاش کنید.';
+}
 
 // real note activity — stored in the existing activities store via Repo.logActivity
 function openCustomerNoteForm(customerId) {
@@ -131,11 +176,13 @@ function openCustomerNoteForm(customerId) {
     });
 }
 
-// ============ PART B: professional device-contacts import ============
-// Overrides the phase-1 basic flow. Permission logic itself lives in
-// CRMNative.pickDeviceContacts (native.js, untouched): checkPermissions first —
-// the system dialog appears only when permission is not already granted, and a
-// denial returns a Persian error without crashing.
+// ============ manual device-contacts import (the "افزودن از مخاطبین گوشی" button) ============
+// The only native call here is CRMNative.pickDeviceContacts (native.js) — the same
+// single implementation the automatic first-visit flow uses (contacts-auto.js), so
+// permission handling and contact reading behave identically everywhere. On success
+// this opens the shared picker (CRMContactsImport.openPicker, contacts-auto.js) —
+// the same search + multi-select UI used by the automatic flow — instead of a
+// second, independent picker implementation.
 function openDeviceContactsImport() {
   if (!window.CRMNative || !CRMNative.isNative()) {
     modal('ورود از مخاطبین گوشی',
@@ -144,71 +191,46 @@ function openDeviceContactsImport() {
       function () { $('#dci-close').onclick = closeModal; });
     return;
   }
-  modal('ورود از مخاطبین گوشی', '<div class="page-loading">در حال خواندن مخاطبین گوشی…</div>');
-  guard(null, async function () {
-    const r = await CRMNative.pickDeviceContacts();
-    closeModal();
-    if (!r.ok) { toast(r.error, 'err'); return; }
-    const list = r.contacts;
-    if (!list.length) { toast('مخاطب قابل ورود یافت نشد', 'warn'); return; }
+  modal('ورود از مخاطبین گوشی', '<div class="page-loading" id="dci-loading">در حال خواندن مخاطبین گوشی…</div>');
+  // While this manual flow owns the screen, the automatic flow of the Contacts page
+  // (contacts-auto.js) must not open its own picker or banner from the same shared read:
+  // two flows finishing on one result used to close each other's modal.
+  var CI = window.CRMContactsImport || (window.CRMContactsImport = {});
+  CI.manualBusy = true;
+  const myToken = CI.manualToken = (CI.manualToken || 0) + 1; // a newer tap takes over the screen
+  // The step runs directly here (own try/catch), not via guard(btn, fn), because
+  // there is no real button element while this loading modal is open — guard()
+  // would silently do nothing with a falsy target and the modal would spin forever.
+  (async function () {
+    let r;
+    try {
+      r = await CRMNative.pickDeviceContacts();
+    } catch (e) {
+      r = { ok: false, code: 'native_error', error: 'خطای غیرمنتظره هنگام خواندن مخاطبین: ' + (e && e.message ? e.message : 'نامشخص') };
+    } finally {
+      if (myToken === CI.manualToken) CI.manualBusy = false;
+    }
+    if (myToken !== CI.manualToken) return; // superseded by a newer tap
+    // the user closed the loading modal (or another modal replaced it): nothing to update
+    const loading = document.getElementById('dci-loading');
+    if (!loading) return;
+    // Errors are shown INSIDE the same modal and stay until the user closes it — they are
+    // never a toast that disappears in a few seconds.
+    const fail = function (text) {
+      loading.parentNode.innerHTML = '<div class="card" style="border-color:var(--warning-border);background:var(--warning-bg)">' +
+        '<b style="color:var(--warning)">' + esc(text) + '</b></div>';
+    };
+    if (!r.ok) { fail(r.error || 'ورود مخاطبین ممکن نشد.'); return; }
+    const list = r.contacts || [];
+    if (!list.length) { fail('مخاطبی در گوشی یافت نشد'); return; }
     const fresh = list.filter(c => !c.existsInCrm);
     const existing = list.length - fresh.length;
-    const picked = {};
-    modal('ورود از مخاطبین گوشی',
-      '<p class="muted">' + fmt(list.length) + ' مخاطب خوانده شد — ' + fmt(existing) + ' مورد از قبل در سامانه موجود است.</p>' +
-      (fresh.length
-        ? '<div class="card" style="padding:.6rem"><input id="dci-q" type="search" placeholder="جستجو بر اساس نام یا شماره…" style="margin-bottom:.4rem"></div>' +
-          '<div class="picker-list" id="dci-list">' + fresh.map((c, i) =>
-          '<div class="picker-row" data-dci-row="' + i + '"><input type="checkbox" data-dci="' + i + '">' +
-          '<div style="min-width:0"><div class="pr-name">' + esc(c.name) + '</div>' +
-          '<div class="pr-phone">' + esc(c.phone) + '</div></div></div>').join('') + '</div>'
-        : '<p class="muted">همه مخاطبین از قبل در سامانه موجودند.</p>') +
-      formErr() +
-      '<button class="btn btn-block" id="dci-go"' + (fresh.length ? '' : ' disabled') + '>افزودن انتخاب‌شده‌ها</button>',
-      function () {
-        // live search over name + normalized digits of phone
-        const inp = $('#dci-q');
-        if (inp) inp.oninput = function () {
-          const q = inp.value.trim().toLowerCase();
-          const qDigits = q.replace(/\D/g, '');
-          document.querySelectorAll('[data-dci-row]').forEach(function (row) {
-            const idx = Number(row.dataset.dciRow);
-            const c = fresh[idx];
-            const match = !q ||
-              (c.name && c.name.toLowerCase().includes(q)) ||
-              (qDigits && c.phone && c.phone.replace(/\D/g, '').includes(qDigits));
-            row.style.display = match ? '' : 'none';
-          });
-        };
-        $('#dci-go').onclick = function () {
-          const chosen = [];
-          document.querySelectorAll('[data-dci]').forEach(function (cb) { if (cb.checked) chosen.push(fresh[Number(cb.dataset.dci)]); });
-          if (!chosen.length) { showErr(new Error('هیچ مخاطبی انتخاب نشده است')); return; }
-          guard($('#dci-go'), async function () {
-            let added = 0, dupBlocked = 0, failed = 0;
-            for (const c of chosen) {
-              try {
-                // duplicate prevention at creation time — re-check against CRM
-                const norm = String(c.phone || '').replace(/\D/g, '');
-                const dups = norm ? await Repo.list('customers', x => !x.archived && String(x.phone || '').replace(/\D/g, '') === norm) : [];
-                if (dups.length) { dupBlocked++; continue; }
-                await CustomerService.create({ name: c.name, phone: c.phone });
-                added++;
-              } catch (e) {
-                // service-level duplicate message counts as blocked, others as failures
-                if (String(e.message || '').indexOf('موجود') !== -1) dupBlocked++; else failed++;
-              }
-            }
-            closeModal();
-            let msg = fmt(added) + ' مخاطب افزوده شد';
-            if (dupBlocked) msg += ' — ' + fmt(dupBlocked) + ' مورد تکراری بود و ایجاد نشد (شماره قبلاً در سامانه موجود است)';
-            if (failed) msg += ' — ' + fmt(failed) + ' مورد ناموفق';
-            toast(msg, added ? 'ok' : 'warn');
-            render();
-          });
-        };
-      });
-  });
+    // closeModal(true) = immediate. The animated closeModal() clears #modal-root 170ms later,
+    // which erased the picker opened right after it: loading, then nothing, and no error.
+    if (!fresh.length) { closeModal(true); toast('همه ' + fmt(list.length) + ' مخاطب گوشی از قبل در سامانه موجودند', 'info'); return; }
+    closeModal(true);
+    window.CRMContactsImport.openPicker(fresh, existing);
+  })();
 }
 // keep the same entry point the contacts-page button uses
 window.openDeviceContactsImport = openDeviceContactsImport;

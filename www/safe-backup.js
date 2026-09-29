@@ -35,7 +35,7 @@
           try {
             dump = JSON.parse(reader.result);
           } catch (err) {
-            toast('فایل انتخابی، پشتیبان معتبر JSON نیست', 'err');
+            toast('فایل انتخابی، پشتیبان معتبر نیست', 'err');
             return;
           }
           // validation happens BEFORE anything touches the database

@@ -154,7 +154,7 @@ async function showFilterResults(filterDef, rows) {
         '<br><span class="muted">' + esc(c.phone || 'بدون تلفن') + '</span></div></div>').join('') + '</div>'
       : '<p class="muted">هیچ مشتری با این شرایط یافت نشد.</p>') +
     '<div class="btn-row">' +
-    (rows.length ? '<button class="btn" id="afx-export">خروجی CSV نتیجه</button>' : '') +
+    (rows.length ? '<button class="btn" id="afx-export">خروجی اکسل نتیجه</button>' : '') +
     '<button class="btn secondary" id="afx-close">بستن</button></div>',
     function () {
       $('#afx-close').onclick = closeModal;

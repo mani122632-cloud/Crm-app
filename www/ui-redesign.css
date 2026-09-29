@@ -1,68 +1,193 @@
-/* ui-redesign.css — PHASE 1+2 additive components.
-   Base remains style.css (Stage 8 gold/ivory palette, complete version).
-   This file only ADDS components; load it after style.css. */
-.dash-hero {
-  background: var(--text);
-  border-radius: var(--r-lg);
-  border-bottom: 3px solid var(--primary);
-  padding: var(--sp-4);
-  margin-bottom: var(--sp-3);
-  color: var(--bg);
-  box-shadow: var(--shadow-2);
-}
-.dash-hero .dh-label { font-size: var(--fs-micro); color: rgba(246,241,231,.7); }
-.dash-hero .dh-value { font-size: 1.55rem; font-weight: 800; color: #d9b44a; margin-top: 2px; }
-.dash-hero .dh-sub { font-size: var(--fs-caption); color: rgba(246,241,231,.7); margin-top: 2px; }
+/* ==========================================================================
+   ui-redesign.css — کامپوننت‌های صفحه‌ها (داشبورد، مشتری، فرصت‌ها، تقویم، منو…)
+   فقط ظاهر و چینش؛ کلاس‌ها و شناسه‌های موجود در کد دست‌نخورده‌اند.
+   ========================================================================== */
 
-/* professional empty state */
-.empty-pro { text-align: center; padding: var(--sp-8) var(--sp-4); animation: enterUp 250ms ease both; }
-.empty-pro .ep-icon {
-  width: 64px; height: 64px; margin: 0 auto var(--sp-3);
-  border-radius: 50%;
-  background: var(--primary-soft);
-  border: 2px dashed var(--primary);
-  display: flex; align-items: center; justify-content: center;
-}
-.empty-pro .ep-icon svg { width: 30px; height: 30px; color: var(--primary-hover); }
-.empty-pro h3 { font-size: var(--fs-body); color: var(--text-2); margin-bottom: 4px; }
-.empty-pro p { color: var(--muted); font-size: var(--fs-caption); max-width: 22rem; margin: 0 auto var(--sp-3); }
+/* ---------- برند (منوی کناری دسکتاپ) ---------- */
+.brand-mark{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 6px 14px rgba(201,162,39,.35)}
+.brand-mark svg{width:22px;height:22px}
 
-/* quick-access chips (dashboard) */
-.qa-row { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: var(--sp-2); margin-bottom: var(--sp-3); -webkit-overflow-scrolling: touch; }
-.qa-chip {
-  flex-shrink: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-full);
-  padding: .45rem .9rem;
-  font-size: var(--fs-caption); font-weight: 600;
-  color: var(--text-2); font-family: inherit;
-  cursor: pointer; min-height: 38px;
-  transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+/* ---------- داشبورد: کارت خلاصه فروش ---------- */
+.dash-hero{
+  position:relative;overflow:hidden;
+  border-radius:var(--r-lg);padding:var(--sp-5) var(--sp-5) var(--sp-5);margin-bottom:var(--sp-4);
+  box-shadow:0 14px 30px rgba(17,17,17,.28);
 }
-.qa-chip:active { background: var(--primary-soft); border-color: var(--primary); transform: scale(.95); }
+.dash-hero::before,.dash-hero::after{content:"";position:absolute;border-radius:50%;pointer-events:none;background:rgba(255,255,255,.10)}
+.dash-hero::before{width:170px;height:170px;top:-70px;inset-inline-end:-50px}
+.dash-hero::after{width:110px;height:110px;bottom:-60px;inset-inline-end:70px;background:rgba(255,255,255,.07)}
+.dash-hero > *{position:relative;z-index:1}
+.dash-hero .dh-label{font-size:var(--fs-caption);font-weight:600;color:rgba(255,255,255,.82)}
+.dash-hero .dh-value{font-size:1.9rem;font-weight:800;line-height:1.35;margin:.3rem 0 .15rem;color:#fff}
+.dash-hero .dh-sub{font-size:var(--fs-caption);color:rgba(255,255,255,.82)}
+.dash-hero .dh-anim{animation:vIn 400ms cubic-bezier(.2,.8,.3,1)}
 
-/* customer 360 layout */
-.c360-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-2); margin: var(--sp-3) 0; }
-.c360-grid button {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-2);
-  border-radius: var(--r-sm);
-  padding: .55rem .2rem;
-  font-size: var(--fs-micro); font-weight: 600;
-  font-family: inherit; cursor: pointer;
-  min-height: 44px;
-  transition: background var(--t-fast), transform var(--t-fast);
+/* ---------- شاخص‌ها ---------- */
+.stat-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);margin-bottom:var(--sp-4)}
+.stat-cards.two{grid-template-columns:repeat(2,1fr)}
+.stat{
+  position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-md);padding:var(--sp-4) var(--sp-4) var(--sp-3);text-align:start;
+  box-shadow:var(--shadow-1);cursor:pointer;
+  transition:transform var(--t-fast),box-shadow var(--t-med);
 }
-.c360-grid button:active { background: var(--primary-soft); border-color: var(--primary); transform: scale(.95); }
-@media (max-width: 360px) { .c360-grid { grid-template-columns: repeat(2, 1fr); } }
+.stat:active{transform:scale(.97);box-shadow:var(--shadow-2)}
+.stat::before{content:"";display:block;width:8px;height:8px;border-radius:50%;margin-bottom:var(--sp-2)}
+.stat .v{font-size:clamp(1.15rem,5.6vw,1.6rem);font-weight:800;line-height:1.35;color:var(--text);white-space:nowrap}
+.stat .l{font-size:var(--fs-caption);font-weight:600;color:var(--muted);margin-top:2px;line-height:1.5}
+@media (max-width:360px){.stat-cards{grid-template-columns:repeat(2,1fr)}}
 
-/* contacts picker */
-.picker-list { max-height: 44vh; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r-sm); padding: .3rem; margin-bottom: var(--sp-3); background: var(--surface-2); }
-.picker-row { display: flex; align-items: center; gap: .6rem; padding: .5rem .4rem; border-bottom: 1px solid var(--border); }
-.picker-row:last-child { border-bottom: none; }
-.picker-row input[type="checkbox"] { width: 22px; height: 22px; flex-shrink: 0; accent-color: var(--primary); }
-.picker-row .pr-name { font-weight: 600; font-size: var(--fs-caption); }
-.picker-row .pr-phone { color: var(--muted); font-size: var(--fs-micro); }
-.picker-row .pr-exists { flex-shrink: 0; }
+/* ---------- دسترسی سریع ---------- */
+.qa-row{
+  display:flex;gap:.5rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+  margin:0 calc(-1 * var(--page-x)) var(--sp-2);padding:2px var(--page-x) var(--sp-2);
+}
+.qa-row::-webkit-scrollbar{display:none}
+.qa-chip{
+  flex-shrink:0;display:inline-flex;align-items:center;gap:.35rem;min-height:42px;padding:.45rem 1rem;
+  background:var(--surface);color:var(--text-2);border:1px solid var(--border-strong);border-radius:var(--r-full);
+  font-family:inherit;font-size:var(--fs-caption);font-weight:700;cursor:pointer;
+  transition:background var(--t-fast),border-color var(--t-fast),transform var(--t-fast);
+}
+.qa-chip:active{transform:scale(.95);background:var(--primary-soft);border-color:var(--primary)}
+.qa-chip[id^="qa-"]{background:var(--primary-soft);color:var(--primary);border-color:transparent}
+.qa-chip[id^="qa-"]::before{content:"";display:block;width:14px;height:14px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='5' x2='12' y2='19'/%3E%3Cline x1='5' y1='12' x2='19' y2='12'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='5' x2='12' y2='19'/%3E%3Cline x1='5' y1='12' x2='19' y2='12'/%3E%3C/svg%3E") center/contain no-repeat}
+
+/* ---------- حالت خالی ---------- */
+.empty-pro{text-align:center;padding:var(--sp-8) var(--sp-4);animation:enterUp 250ms ease both}
+.empty-pro .ep-icon{width:68px;height:68px;margin:0 auto var(--sp-4);border-radius:22px;background:var(--primary-soft);display:flex;align-items:center;justify-content:center}
+.empty-pro .ep-icon svg{width:30px;height:30px;color:var(--primary)}
+.empty-pro h3{font-size:var(--fs-title);color:var(--text);margin-bottom:6px}
+.empty-pro p{color:var(--muted);font-size:var(--fs-caption);max-width:22rem;margin:0 auto var(--sp-4)}
+
+/* ---------- منوی «بیشتر» ---------- */
+.menu-card{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:var(--sp-3);
+  background:none;border:none;box-shadow:none;padding:0;border-radius:0;overflow:visible;margin-bottom:var(--sp-2);
+}
+.menu-card > .list-item,.menu-card > .list-item:first-child,.menu-card > .list-item:last-child{
+  margin:0;flex-direction:row;align-items:center;justify-content:flex-start;flex-wrap:nowrap;gap:.7rem;
+  min-height:68px;padding:.75rem;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-md);box-shadow:var(--shadow-1);
+}
+.menu-card > .list-item:active{background:var(--surface-2)}
+.menu-card > .list-item > div{flex:1 1 auto;align-items:center!important;gap:.7rem!important;font-weight:700;font-size:var(--fs-caption);line-height:1.5}
+.mi-ico{width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:14px;background:var(--primary-soft);color:var(--primary)}
+.mi-ico svg{width:22px;height:22px}
+.mi-chev{display:none}
+@media (min-width:600px){.menu-card{grid-template-columns:repeat(3,1fr)}}
+@media (min-width:960px){.menu-card{grid-template-columns:repeat(4,1fr)}}
+
+/* ---------- پرونده مشتری: اقدام‌های سریع ---------- */
+.c360-grid,.action-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-2);margin:var(--sp-3) 0}
+.c360-grid button,.action-grid button{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;
+  min-height:72px;padding:.6rem .2rem;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-md);color:var(--text-2);font-family:inherit;font-size:var(--fs-micro);font-weight:700;
+  box-shadow:var(--shadow-1);cursor:pointer;
+  transition:background var(--t-fast),transform var(--t-fast),color var(--t-fast);
+}
+.c360-grid button:active,.action-grid button:active{background:var(--primary-soft);color:var(--primary);transform:scale(.95)}
+.c360-grid #c3-call::before{content:"";display:block;width:22px;height:22px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 3a2 2 0 0 1-.5 2L8 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2-.5c1 .3 2 .5 3 .7a2 2 0 0 1 1.7 2z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 3a2 2 0 0 1-.5 2L8 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2-.5c1 .3 2 .5 3 .7a2 2 0 0 1 1.7 2z'/%3E%3C/svg%3E") center/contain no-repeat}
+.c360-grid #c3-task::before{content:"";display:block;width:22px;height:22px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 11 12 14 22 4'/%3E%3Cpath d='M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 11 12 14 22 4'/%3E%3Cpath d='M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'/%3E%3C/svg%3E") center/contain no-repeat}
+.c360-grid #c3-fu::before{content:"";display:block;width:22px;height:22px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'/%3E%3Cpath d='M13.7 21a2 2 0 0 1-3.4 0'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'/%3E%3Cpath d='M13.7 21a2 2 0 0 1-3.4 0'/%3E%3C/svg%3E") center/contain no-repeat}
+.c360-grid #c3-appt::before{content:"";display:block;width:22px;height:22px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpolyline points='12 7 12 12 15.5 14'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpolyline points='12 7 12 12 15.5 14'/%3E%3C/svg%3E") center/contain no-repeat}
+.c360-grid #c3-deal::before{content:"";display:block;width:22px;height:22px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='7' width='20' height='14' rx='2'/%3E%3Cpath d='M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='7' width='20' height='14' rx='2'/%3E%3Cpath d='M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'/%3E%3C/svg%3E") center/contain no-repeat}
+.c360-grid #c3-order::before{content:"";display:block;width:22px;height:22px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8h12l-1 12H7z'/%3E%3Cpath d='M9 8V6a3 3 0 0 1 6 0v2'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8h12l-1 12H7z'/%3E%3Cpath d='M9 8V6a3 3 0 0 1 6 0v2'/%3E%3C/svg%3E") center/contain no-repeat}
+.c360-grid #c3-note::before{content:"";display:block;width:22px;height:22px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z'/%3E%3C/svg%3E") center/contain no-repeat}
+.c360-grid #c3-att-scroll::before{content:"";display:block;width:22px;height:22px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48'/%3E%3C/svg%3E") center/contain no-repeat}
+
+.c360-grid button::before{color:var(--primary)}
+@media (max-width:340px){.c360-grid,.action-grid{grid-template-columns:repeat(3,1fr)}}
+
+/* ---------- کارت‌های هوش مصنوعی و دستیار ---------- */
+#c3-ai-card,#dd-ai-card{background:linear-gradient(180deg,var(--primary-soft),var(--surface) 70%);border-color:var(--primary-soft)}
+#c3-ai-card .section-title,#dd-ai-card .section-title{margin:0 0 var(--sp-2);color:var(--primary);font-size:var(--fs-body)}
+#c3-ai-card .section-title::before{content:"";display:inline-block;width:18px;height:18px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z'/%3E%3Cpath d='M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z'/%3E%3Cpath d='M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z'/%3E%3C/svg%3E") center/contain no-repeat}
+#dd-ai-card .section-title::before{content:"";display:inline-block;width:18px;height:18px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z'/%3E%3Cpath d='M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z'/%3E%3Cpath d='M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z'/%3E%3C/svg%3E") center/contain no-repeat}
+
+#ai-copilot-fab{
+  left:16px;bottom:calc(var(--tabbar-h) + 16px);width:54px;height:54px;border-radius:18px;
+  box-shadow:0 10px 24px rgba(201,162,39,.4);
+}
+@media (min-width:960px){#ai-copilot-fab{left:28px;bottom:28px}}
+
+/* ---------- دکمه‌های ثانویه‌ی کنار هم (کلاس btn-pair توسط ui-compat.js اضافه می‌شود؛ بدون :has) ---------- */
+#app > .btn-block.btn-pair{display:inline-flex;width:calc(50% - 6px);vertical-align:top;min-height:44px;height:auto;padding:.4rem .6rem;font-size:var(--fs-caption);text-align:center}
+#app > .btn-block.btn-pair.pair-start{margin-inline-end:12px}
+#app > .btn-block.btn-pair.pair-solo{width:100%;margin-inline-end:0;display:flex}
+#app > .section-title:first-child{margin-top:0}
+
+/* ---------- انتخاب گروهی ---------- */
+#bulk-bar{position:sticky;top:calc(var(--topbar-h) + 8px);z-index:5}
+#bulk-bar .card{background:var(--text);border-color:var(--text);color:#fff;box-shadow:var(--shadow-3)}
+#bulk-bar .card b{color:#fff}
+.list-item > input[type="checkbox"] + div{flex:1 1 11rem;min-width:0}
+
+/* ---------- فرصت‌های فروش: کانبان ---------- */
+.kanban{
+  display:flex;gap:var(--sp-3);overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;
+  margin:0 calc(-1 * var(--page-x));padding:2px var(--page-x) var(--sp-3);scrollbar-width:none;
+}
+.kanban::-webkit-scrollbar{display:none}
+.kan-col{flex:0 0 min(84vw,300px);min-width:0;width:auto;scroll-snap-align:start}
+.kan-col-head{
+  position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:.4rem;
+  background:var(--surface-2);border-radius:var(--r-md) var(--r-md) 0 0;padding:.7rem .9rem;
+  font-size:var(--fs-caption);font-weight:800;color:var(--text-2);
+}
+.kan-col-head .cnt{background:var(--surface);color:var(--primary);border-radius:var(--r-full);padding:0 .55rem;font-size:var(--fs-micro);white-space:nowrap}
+.kan-col-body{background:var(--surface-2);border-radius:0 0 var(--r-md) var(--r-md);padding:0 .55rem .55rem;min-height:5rem;display:flex;flex-direction:column;gap:.5rem}
+.kan-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:.75rem .85rem;cursor:pointer;box-shadow:var(--shadow-1);transition:transform var(--t-fast),box-shadow var(--t-med)}
+.kan-card:active{transform:scale(.97)}
+@media (hover:hover){.kan-card:hover{box-shadow:var(--shadow-2)}}
+.kan-card .kt{font-size:var(--fs-body);font-weight:700;overflow-wrap:anywhere;line-height:1.5}
+.kan-card .km{font-size:var(--fs-micro);color:var(--muted);margin-top:4px;display:flex;justify-content:space-between;gap:.4rem}
+.kan-card .kv{color:var(--primary);font-weight:800}
+.kan-empty{font-size:var(--fs-micro);color:var(--faint);text-align:center;padding:1rem 0}
+@media (min-width:960px){.kan-col{flex-basis:290px}.kanban{scroll-snap-type:none}}
+
+/* ---------- تقویم ---------- */
+.cal-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-bottom:var(--sp-3)}
+.cal-head b{font-size:var(--fs-title);font-weight:800}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:var(--fs-micro)}
+.cal-grid .dow{text-align:center;font-weight:700;color:var(--muted);padding:4px 0}
+.cal-grid .day{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  min-height:3rem;padding:4px;cursor:pointer;text-align:center;font-family:inherit;font-size:var(--fs-caption);font-weight:700;
+  transition:border-color var(--t-fast),transform var(--t-fast),background var(--t-fast);
+}
+.cal-grid .day:active{transform:scale(.93);border-color:var(--primary)}
+.cal-grid .day.selected{border:2px solid var(--primary)}
+.cal-grid .day .dot{width:5px;height:5px;border-radius:50%;background:var(--primary);display:inline-block;margin:1px}
+.cal-grid .day.today .dot{background:#fff}
+.cal-body-anim{animation:enterUp 200ms ease both}
+
+/* ---------- تنظیمات و گزارش‌ها ---------- */
+.settings-group{margin-bottom:var(--sp-4)}
+.settings-group > h3{font-size:var(--fs-caption);color:var(--muted);margin:0 4px .4rem;font-weight:800}
+.card > .btn-block:last-child{margin-bottom:0}
+.card > p.muted:last-child{margin-bottom:0}
+
+/* ---------- انتخاب مخاطبین ---------- */
+.picker-list{max-height:44vh;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md);padding:.3rem;margin-bottom:var(--sp-3);background:var(--surface-2)}
+.picker-row{display:flex;align-items:center;gap:.7rem;padding:.6rem .5rem;border-bottom:1px solid var(--border)}
+.picker-row:last-child{border-bottom:none}
+.picker-row input[type="checkbox"]{width:22px;height:22px;flex-shrink:0}
+.picker-row .pr-name{font-weight:700;font-size:var(--fs-body)}
+.picker-row .pr-phone{color:var(--muted);font-size:var(--fs-caption)}
+.picker-row .pr-exists{flex-shrink:0}
+
+/* ---------- گفت‌وگوی دستیار ---------- */
+.ai-chat-row textarea{min-height:48px;border-radius:14px}
+
+/* ---------- صفحه‌های عریض ---------- */
+@media (min-width:960px){
+  .qa-row{flex-wrap:wrap;overflow:visible;margin-inline:0;padding-inline:0}
+  .stat-cards{grid-template-columns:repeat(4,1fr)}
+  .stat-cards.two{grid-template-columns:repeat(4,1fr)}
+  .profile-meta{grid-template-columns:repeat(4,1fr)}
+  .profile-meta .mrow:nth-last-child(-n+2){border-bottom:1px solid var(--border)}
+  .profile-meta .mrow:nth-last-child(-n+4){border-bottom:none}
+  .c360-grid{grid-template-columns:repeat(8,1fr)}
+}

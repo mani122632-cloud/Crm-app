@@ -1,0 +1,79 @@
+/* ==========================================================================
+   theme-v2.css — تم نهایی: Luxury Gold + Warm Ivory + Dark Charcoal
+   طلایی #C9A227 · شامپاین #D8C078 · عاجی #F6F1E6 / #EDE5D5 · متن #242321 · مشکی #111111
+   بدون سبز، آبی، بنفش و رنگ‌های نئونی.
+   ========================================================================== */
+:root{
+  --primary:#C9A227; --primary-hover:#B08D1E; --primary-soft:#F0E5BC; --on-primary:#111111;
+  --gold:#C9A227; --gold-light:#D8C078; --gold-ink:#7A6110; --ivory:#F6F1E6; --ivory-2:#EDE5D5; --charcoal:#242321; --black:#111111;
+  --success:#6B5A12; --success-bg:#F1E8C4; --success-border:#E0CE8A;
+  --warning:#8A5A00; --warning-bg:#F6E7C2; --warning-border:#E6CF93;
+  --danger:#9B2C2C;  --danger-bg:#F5E1DA;  --danger-border:#E4BDB0;
+  --info:#5A5346;    --info-bg:#EDE5D5;    --info-border:#D8CCB0;
+  --bg:#F6F1E6; --surface:#FBF8F1; --surface-2:#EDE5D5;
+  --border:#E3D9C3; --border-strong:#D2C5A4;
+  --text:#242321; --text-2:#3F3C37; --muted:#726B5C; --faint:#A39B88;
+  --violet:#111111; --cyan:#D8C078; --green:#C9A227; --amber:#B08D1E;
+  --grad-primary:linear-gradient(135deg,#C9A227,#D8C078);
+}
+body{background:var(--bg);color:var(--text)}
+
+/* کنش اصلی: طلایی با متن مشکی (کنتراست بالا) */
+.btn{background:var(--primary);color:var(--on-primary);box-shadow:0 1px 2px rgba(122,97,16,.35)}
+@media (hover:hover){.btn:hover{background:var(--primary-hover)}}
+.btn.secondary{background:var(--primary-soft);color:var(--gold-ink);border-color:var(--gold-light)}
+.btn.ghost{background:transparent;color:var(--text-2);border-color:var(--border-strong)}
+.btn.danger{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+@media (hover:hover){
+  .btn.secondary:hover{background:#E9DBA6}
+  .btn.ghost:hover{background:var(--surface-2)}
+  .btn.danger:hover{background:#EFD1C7}
+}
+.btn.loading::after{border-color:rgba(17,17,17,.25);border-top-color:#111}
+.btn.secondary.loading::after,.btn.ghost.loading::after,.btn.danger.loading::after{border-color:rgba(201,162,39,.3);border-top-color:var(--gold)}
+a{color:var(--gold-ink)}
+::selection{background:var(--gold-light);color:#111}
+:focus-visible{outline-color:var(--gold)}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);box-shadow:0 0 0 4px rgba(201,162,39,.2)}
+input[type="checkbox"],input[type="radio"]{accent-color:var(--gold)}
+.icon-btn{color:var(--charcoal)}
+.section-title,.card h3{color:var(--text-2)}
+
+/* ناوبری */
+#tabbar button.active{color:var(--gold-ink)}
+#tabbar button.active svg{background:var(--primary-soft)}
+.brand-mark{background:var(--grad-primary);color:#111}
+@media (min-width:960px){#tabbar button.active{background:var(--primary-soft)}}
+
+/* داشبورد: کارت مشکی با تأکید طلایی */
+.dash-hero{background:linear-gradient(135deg,#111111,#2B2925);color:#fff;border:1px solid rgba(201,162,39,.45)}
+.dash-hero::before,.dash-hero::after{background:rgba(201,162,39,.12)}
+.dash-hero .dh-label,.dash-hero .dh-sub{color:var(--gold-light)}
+.dash-hero .dh-value{color:var(--gold-light)}
+.stat::before{background:var(--gold)}
+.stat:nth-child(2)::before{background:var(--gold-light)}
+.stat:nth-child(3)::before{background:var(--charcoal)}
+.stat:nth-child(4)::before{background:var(--primary-hover)}
+.hbar .hb-fill{background:var(--grad-primary)}
+.v-warn{color:var(--danger)}
+
+/* عناصر انتخاب‌شده */
+.avatar{background:var(--primary-soft);color:var(--gold-ink)}
+.seg button.active{color:var(--gold-ink);box-shadow:var(--shadow-1),inset 0 -2px 0 var(--gold)}
+.chips .badge.selected,.chips .badge.selected:active{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.cal-grid .day.today{background:var(--primary);border-color:var(--primary);color:#111}
+.cal-grid .day.today .dot{background:#111}
+.cal-grid .day.selected{border-color:var(--gold-ink)}
+.timeline-item::before{background:var(--gold);box-shadow:0 0 0 3px var(--primary-soft)}
+.badge.dark{background:var(--black);color:var(--gold-light);border-color:var(--black)}
+.mi-ico,.empty-pro .ep-icon{background:var(--primary-soft);color:var(--gold-ink)}
+.empty-pro .ep-icon svg{color:var(--gold-ink)}
+.qa-chip[id^="qa-"]{color:var(--gold-ink)}
+.c360-grid button::before{color:var(--gold-ink)}
+.kan-card .kv,.kan-col-head .cnt{color:var(--gold-ink)}
+#c3-ai-card .section-title,#dd-ai-card .section-title{color:var(--gold-ink)}
+#bulk-bar .card{background:var(--black);border-color:var(--gold)}
+#ai-copilot-fab{background:var(--black);color:var(--gold-light);border:1px solid var(--gold)}
+.modal{border-top:2px solid var(--gold)}
+.toast{background:var(--black);color:#fff}
+.fa-date-hint{margin:-.5rem 2px .7rem;color:var(--gold-ink);font-weight:600}

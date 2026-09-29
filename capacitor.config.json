@@ -13,7 +13,7 @@
   "plugins": {
     "LocalNotifications": {
       "smallIcon": "ic_stat_notify",
-      "iconColor": "#b8860b"
+      "iconColor": "#8a6b39"
     }
   }
 }

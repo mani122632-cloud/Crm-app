@@ -6,10 +6,12 @@ const root = path.join(__dirname, '..');
 const dest = path.join(root, 'www');
 const files = [
   'index.html', 'manifest.json',
-  'style.css', 'ui-redesign.css',
+    'capacitor.js', 'contacts-plugin.js', 'local-notifications-plugin.js', 'app-plugin.js',
+  'style.css', 'ui-redesign.css', 'theme-v2.css',
   'db.js', 'repo.js', 'services.js', 'extensions.js', 'app.js',
   'features.js', 'customer360.js', 'dashboard.js', 'advanced-filters.js',
-  'safe-backup.js', 'help.js', 'native.js', 'contacts-auto.js', 'notif-fix.js'
+  'safe-backup.js', 'help.js', 'native.js', 'contacts-auto.js', 'notif-fix.js',
+  'ai-config.js', 'ai-prompts.js', 'ai-gateway.js', 'ai-cache.js', 'ai-service.js', 'ai-copilot.js', 'ui-compat.js'
 ];
 if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
 let ok = 0;
@@ -18,5 +20,11 @@ for (const f of files) {
   if (!fs.existsSync(src)) { console.error('MISSING: ' + f + ' (build stopped)'); process.exit(1); }
   fs.copyFileSync(src, path.join(dest, f));
   ok++;
+}
+// فونت‌ها (اختیاری): اگر پوشه‌ی fonts/ وجود دارد کپی شود
+const fdir = path.join(root, 'fonts');
+if (fs.existsSync(fdir)) {
+  const fd = path.join(dest, 'fonts'); fs.mkdirSync(fd, { recursive: true });
+  fs.readdirSync(fdir).forEach(function (f) { fs.copyFileSync(path.join(fdir, f), path.join(fd, f)); });
 }
 console.log('www/ ready: ' + ok + ' files copied.');

@@ -4,13 +4,13 @@
 /* global Repo, DB, CustomerService, CompanyService, ContactService, LeadService, DealService,
    ProjectService, PipelineService, CallService, FollowUpService, TaskService, AppointmentService,
    NotifService, ProductService, OrderService, AutomationService, DashboardService, CalendarService,
-   SearchService, CustomFieldService, num, Dates */
+   SearchService, CustomFieldService, num, Dates, AIService */
 var $ = function (sel) { return document.querySelector(sel); };
 var app = $('#app');
 var fmt = function (n) { return Number(n || 0).toLocaleString('fa-IR'); };
 var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-var dateFa = function (iso) { return iso ? new Date(iso).toLocaleDateString('fa-IR') : '—'; };
-var dateTimeFa = function (iso) { return iso ? new Date(iso).toLocaleString('fa-IR') : '—'; };
+var dateFa = function (iso) { try { return iso ? new Date(iso).toLocaleDateString('fa-IR-u-ca-persian', String(iso).length === 10 ? { timeZone: 'UTC' } : undefined) : '—'; } catch (e) { return iso ? new Date(iso).toLocaleDateString('fa-IR') : '—'; } };
+var dateTimeFa = function (iso) { try { return iso ? new Date(iso).toLocaleString('fa-IR-u-ca-persian') : '—'; } catch (e) { return iso ? new Date(iso).toLocaleString('fa-IR') : '—'; } };
 var enterCls = function (i) { return 'enter enter-' + (Math.min(i, 6) + 1); };
 function toast(msg, type) {
   var root = $('#toast-root');
@@ -80,7 +80,7 @@ async function guard(btn, fn) {
   finally { btn.disabled = false; btn.classList.remove('loading'); }
 }
 var Routes = {};
-var TITLES = { today: 'امروز', customers: 'مشتریان', customer: 'مشتری', contacts: 'مخاطبین', leads: 'سرنخ‌ها', deals: 'Dealها', deal: 'Deal', projects: 'پروژه‌ها', project: 'پروژه', tasks: 'کارها', calendar: 'تقویم', products: 'محصولات', product: 'محصول', orders: 'سفارش‌ها', order: 'سفارش', calls: 'تماس‌ها', followups: 'پیگیری‌ها', appointments: 'قرارها', reports: 'گزارش‌ها', settings: 'تنظیمات', pipelines: 'Pipelineها', customfields: 'فیلدهای سفارشی', companies: 'شرکت‌ها', company: 'شرکت', more: 'بیشتر' };
+var TITLES = { today: 'امروز', customers: 'مشتریان', customer: 'مشتری', contacts: 'مخاطبین', leads: 'سرنخ‌ها', deals: 'فرصت‌ها', deal: 'فرصت فروش', projects: 'پروژه‌ها', project: 'پروژه', tasks: 'کارها', calendar: 'تقویم', products: 'محصولات', product: 'محصول', orders: 'سفارش‌ها', order: 'سفارش', calls: 'تماس‌ها', followups: 'پیگیری‌ها', appointments: 'قرارها', reports: 'گزارش‌ها', settings: 'تنظیمات', pipelines: 'فرایندهای فروش', customfields: 'فیلدهای سفارشی', companies: 'شرکت‌ها', company: 'شرکت', more: 'بیشتر' };
 var currentRoute = 'today';
 function navigate(route, param) {
   currentRoute = route;
@@ -90,7 +90,8 @@ function navigate(route, param) {
 async function render(param, dir) {
   document.querySelectorAll('#tabbar button').forEach(function (b) {
     var mainRoutes = ['today', 'customers', 'deals', 'tasks'];
-    b.classList.toggle('active', b.dataset.route === currentRoute || (b.dataset.route === 'more' && mainRoutes.indexOf(currentRoute) === -1));
+    var tabRoute = ({ customer: 'customers', deal: 'deals', task: 'tasks' })[currentRoute] || currentRoute;   // صفحه‌ی جزئیات → تب والد
+    b.classList.toggle('active', b.dataset.route === tabRoute || (b.dataset.route === 'more' && mainRoutes.indexOf(tabRoute) === -1));
   });
   $('#btn-back').hidden = !param;
   $('#screen-title').textContent = TITLES[currentRoute] || currentRoute;
@@ -155,9 +156,9 @@ $('#global-search').addEventListener('input', function (e) {
       };
       html += sec('مشتریان', r.customers, 'customer');
       html += sec('شرکت‌ها', r.companies, 'company');
-      html += sec('Dealها', r.deals.map(d => Object.assign({ name: d.title }, d)), 'deal');
+      html += sec('فرصت‌ها', r.deals.map(d => Object.assign({ name: d.title }, d)), 'deal');
       html += sec('پروژه‌ها', r.projects, 'project');
-      if (r.leads.length) html += secTitle('Leadها', r.leads.length) + '<div class="card">' + r.leads.slice(0, 5).map(l => '<div class="list-item"><span>' + esc(l.name) + '</span><span class="muted">' + esc(l.phone || '') + '</span></div>').join('') + '</div>';
+      if (r.leads.length) html += secTitle('سرنخ‌ها', r.leads.length) + '<div class="card">' + r.leads.slice(0, 5).map(l => '<div class="list-item"><span>' + esc(l.name) + '</span><span class="muted">' + esc(l.phone || '') + '</span></div>').join('') + '</div>';
       if (r.products.length) html += secTitle('محصولات') + '<div class="card">' + r.products.slice(0, 5).map(p => '<div class="list-item" data-nav="product/' + p.id + '"><span>' + esc(p.name) + '</span></div>').join('') + '</div>';
       if (r.orders.length) html += secTitle('سفارش‌ها') + '<div class="card">' + r.orders.slice(0, 5).map(o => '<div class="list-item" data-nav="order/' + o.id + '"><span>' + esc(o.number) + '</span><span class="muted">' + fmt(o.total) + '</span></div>').join('') + '</div>';
       box.innerHTML = html || '<div class="search-status">نتیجه‌ای برای «' + esc(q.trim()) + '» یافت نشد</div>';
@@ -177,7 +178,7 @@ async function pipelineStageSelects(pipelineId, stageId) {
   const pipelines = await Repo.list('pipelines');
   const stages = await Repo.list('stages', s => s.pipelineId === pipelineId);
   stages.sort((a, b) => a.order - b.order);
-  return field('Pipeline', '<select id="d-pipeline">' + pipelines.map(p => '<option value="' + p.id + '" ' + (p.id === pipelineId ? 'selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>') +
+  return field('فرایند فروش', '<select id="d-pipeline">' + pipelines.map(p => '<option value="' + p.id + '" ' + (p.id === pipelineId ? 'selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>') +
     field('مرحله', '<select id="d-stage">' + stages.map(s => '<option value="' + s.id + '" ' + (s.id === stageId ? 'selected' : '') + '>' + esc(s.name) + '</option>').join('') + '</select>');
 }
 function bindPipelineStageSync() {
@@ -226,7 +227,7 @@ async function saveCustomFields(entityType, entityId, containerId) {
   await CustomFieldService.setValues(entityType, entityId, collectCustomFieldValues(containerId));
 }
 function activityLabel(t) {
-  const map = { customer_created: 'ایجاد مشتری', customer_updated: 'ویرایش مشتری', contact_created: 'افزودن مخاطب', lead_created: 'ایجاد Lead', lead_updated: 'ویرایش Lead', lead_converted: 'تبدیل Lead', convert_lead: 'تبدیل به Lead', deal_created: 'ایجاد Deal', deal_stage: 'تغییر مرحله Deal', project_created: 'ایجاد پروژه', call: 'تماس', followup_created: 'ثبت پیگیری', followup_done: 'انجام پیگیری', task_created: 'ایجاد کار', task_done: 'انجام کار', order: 'سفارش', appointment: 'قرار', note: 'یادداشت' };
+  const map = { customer_created: 'ایجاد مشتری', customer_updated: 'ویرایش مشتری', contact_created: 'افزودن مخاطب', lead_created: 'ایجاد سرنخ', lead_updated: 'ویرایش سرنخ', lead_converted: 'تبدیل سرنخ', convert_lead: 'تبدیل به سرنخ', deal_created: 'ایجاد فرصت فروش', deal_stage: 'تغییر مرحله فرصت فروش', project_created: 'ایجاد پروژه', call: 'تماس', followup_created: 'ثبت پیگیری', followup_done: 'انجام پیگیری', task_created: 'ایجاد کار', task_done: 'انجام کار', order: 'سفارش', appointment: 'قرار', note: 'یادداشت' };
   return map[t] || t;
 }
 Routes.today = async function () {
@@ -247,7 +248,7 @@ Routes.today = async function () {
   const lastOrdersSorted = lastOrders.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 3);
   const alertCnt = d.overdueTasks.length + d.overdueFollowups.length + d.lowStock.length + d.stalledDeals.length + d.stalledProjects.length;
   let h = '<div class="stat-cards two">' +
-    '<div class="stat" data-nav="deals"><div class="v v-anim">' + fmt(d.counts.activeDeals) + '</div><div class="l">Deal فعال</div></div>' +
+    '<div class="stat" data-nav="deals"><div class="v v-anim">' + fmt(d.counts.activeDeals) + '</div><div class="l">فرصت فروش فعال</div></div>' +
     '<div class="stat" data-nav="followups"><div class="v v-anim">' + fmt(d.todayFollowups.length + d.todayTasks.length + d.todayAppointments.length) + '</div><div class="l">موارد امروز</div></div>' +
     '<div class="stat" data-nav="customers"><div class="v v-anim">' + fmt(d.counts.customers) + '</div><div class="l">مشتریان</div></div>' +
     '<div class="stat" data-nav="orders"><div class="v v-anim">' + fmt(d.salesTotal) + '</div><div class="l">فروش کل (تومان)</div></div></div>';
@@ -261,12 +262,12 @@ Routes.today = async function () {
   h += sec('پیگیری‌های نزدیک (۷ روز آینده)', upFollowups, f => '<div class="list-item" data-nav="customer/' + f.customerId + '"><div><b>' + esc(f.title) + '</b><br><span class="muted">' + esc(custName(f.customerId)) + '</span></div>' + badge(dateFa(f.dueDate), f.priority === 'high' ? 'danger' : '') + '</div>');
   h += sec('کارهای نزدیک (۷ روز آینده)', upTasks, t => '<div class="list-item" data-task="' + t.id + '"><div><b>' + esc(t.title) + '</b></div>' + badge(dateFa(t.dueDate), t.priority === 'high' ? 'danger' : '') + '</div>');
   h += sec('قرارهای نزدیک (۷ روز آینده)', upAppointments, a => '<div class="list-item" data-nav="appointments"><div><b>' + esc(a.title) + '</b><br><span class="muted">' + esc(custName(a.customerId)) + '</span></div>' + badge(dateFa(a.datetime)) + '</div>');
-  h += sec('Dealهای مهم (بیشترین ارزش)', topDeals, x => '<div class="list-item" data-nav="deal/' + x.id + '"><div><b>' + esc(x.title) + '</b><br><span class="muted">' + esc(custName(x.customerId)) + ' — ' + esc(stageName(x.stageId)) + '</span></div><span class="muted"><b>' + fmt(x.value) + '</b></span></div>');
+  h += sec('فرصت‌های فروش مهم (بیشترین ارزش)', topDeals, x => '<div class="list-item" data-nav="deal/' + x.id + '"><div><b>' + esc(x.title) + '</b><br><span class="muted">' + esc(custName(x.customerId)) + ' — ' + esc(stageName(x.stageId)) + '</span></div><span class="muted"><b>' + fmt(x.value) + '</b></span></div>');
   if (openDeals.length) {
     const byStage = {};
     for (const dl of openDeals) { if (!byStage[dl.stageId]) byStage[dl.stageId] = { n: 0, sum: 0 }; byStage[dl.stageId].n++; byStage[dl.stageId].sum += num(dl.value); }
     const maxSum = Math.max.apply(null, Object.keys(byStage).map(k => byStage[k].sum));
-    h += secTitle('وضعیت Pipeline') + '<div class="card">' + Object.keys(byStage).map(sid => hbar(stageName(sid), byStage[sid].sum, maxSum, fmt(byStage[sid].n) + ' Deal — ' + fmt(byStage[sid].sum))).join('') + '</div>';
+    h += secTitle('وضعیت فرایند فروش') + '<div class="card">' + Object.keys(byStage).map(sid => hbar(stageName(sid), byStage[sid].sum, maxSum, fmt(byStage[sid].n) + ' فرصت — ' + fmt(byStage[sid].sum))).join('') + '</div>';
   }
   h += secTitle('سفارش‌ها') + '<div class="card">' +
     '<div class="list-item" data-nav="orders"><span>تعداد سفارش</span><span class="muted">' + fmt(d.ordersCount) + '</span></div>' +
@@ -276,12 +277,12 @@ Routes.today = async function () {
     h += secTitle('هشدارها', alertCnt) + '<div class="card">';
     if (d.overdueTasks.length) h += '<div class="list-item" data-nav="tasks"><span>' + badge('عقب‌افتاده', 'danger') + ' کارهای عقب‌افتاده</span><span class="muted">' + fmt(d.overdueTasks.length) + '</span></div>';
     if (d.overdueFollowups.length) h += '<div class="list-item" data-nav="followups"><span>' + badge('عقب‌افتاده', 'danger') + ' پیگیری‌های عقب‌افتاده</span><span class="muted">' + fmt(d.overdueFollowups.length) + '</span></div>';
-    if (d.stalledDeals.length || d.stalledProjects.length) h += '<div class="list-item" data-nav="reports"><span>' + badge('خوابیده', 'warn') + ' Deal/پروژه خوابیده</span><span class="muted">' + fmt(d.stalledDeals.length + d.stalledProjects.length) + '</span></div>';
+    if (d.stalledDeals.length || d.stalledProjects.length) h += '<div class="list-item" data-nav="reports"><span>' + badge('خوابیده', 'warn') + ' فرصت فروش/پروژه خوابیده</span><span class="muted">' + fmt(d.stalledDeals.length + d.stalledProjects.length) + '</span></div>';
     if (d.lowStock.length) h += '<div class="list-item" data-nav="products"><span>' + badge('موجودی کم', 'danger') + ' محصولات با موجودی کم</span><span class="muted">' + fmt(d.lowStock.length) + '</span></div>';
     h += '</div>';
   }
   h += '<div class="card"><div class="card-head"><h3>اقدام سریع</h3></div><div class="action-grid" style="grid-template-columns:repeat(2,1fr)">' +
-    '<button id="qa-cust">مشتری جدید</button><button id="qa-lead">Lead جدید</button><button id="qa-deal">Deal جدید</button><button id="qa-call">ثبت تماس</button></div></div>';
+    '<button id="qa-cust">مشتری جدید</button><button id="qa-lead">سرنخ جدید</button><button id="qa-deal">فرصت فروش جدید</button><button id="qa-call">ثبت تماس</button></div></div>';
   h += secTitle('فعالیت‌های اخیر') + '<div class="card">' +
     (d.recentActivities.length ? d.recentActivities.map(a => '<div class="timeline-item"><b>' + esc(activityLabel(a.type)) + '</b> — ' + esc(a.note || '') + '<br><span class="muted">' + dateTimeFa(a.createdAt) + '</span></div>').join('') : '<div class="muted">فعالیتی ثبت نشده</div>') + '</div>';
   setTimeout(bindToday, 0);
@@ -355,7 +356,7 @@ Routes.customers = async function () {
     (c.tags || []).map(t => { const tg = tags.find(x => x.id === t); return tg ? badge(tg.name) : ''; }).join('') +
     '<br><span class="muted">' + esc(c.phone || 'بدون تلفن') + (compName(c.companyId) ? ' — ' + esc(compName(c.companyId)) : '') + (c.lastActivityAt ? ' — آخرین فعالیت: ' + dateFa(c.lastActivityAt) : '') + '</span>' +
     (nextFu[c.id] ? '<br><span class="muted">پیگیری بعدی: ' + dateFa(nextFu[c.id]) + '</span>' : '') +
-    (firstDeal[c.id] ? '<br><span class="muted">Deal باز: ' + esc(firstDeal[c.id].title) + ' (' + fmt(firstDeal[c.id].value) + ')</span>' : '') + '</div></div>').join('') + '</div>'
+    (firstDeal[c.id] ? '<br><span class="muted">فرصت فروش باز: ' + esc(firstDeal[c.id].title) + ' (' + fmt(firstDeal[c.id].value) + ')</span>' : '') + '</div></div>').join('') + '</div>'
     : emptyState('مشتری‌ای با این شرایط پیدا نشد. اولین مشتری را اضافه کنید.', 'افزودن مشتری', 'empty-act', 'هنوز مشتری‌ای ثبت نشده');
   setTimeout(function () {
     $('#add-customer').onclick = function () { openCustomerForm(); };
@@ -487,19 +488,19 @@ Routes.customer = async function (id) {
   h += '<div class="card">' +
     '<div class="list-item"><span class="muted">آخرین فعالیت</span><span>' + (c.lastActivityAt ? dateFa(c.lastActivityAt) : '—') + '</span></div>' +
     '<div class="list-item"><span class="muted">پیگیری بعدی</span><span>' + (nextFu ? dateFa(nextFu) : '—') + '</span></div>' +
-    '<div class="list-item"><span class="muted">Deal باز</span><span>' + fmt(openDeals.length) + '</span></div>' +
+    '<div class="list-item"><span class="muted">فرصت فروش باز</span><span>' + fmt(openDeals.length) + '</span></div>' +
     '<div class="list-item"><span class="muted">پروژه فعال</span><span>' + fmt(activeProjects.length) + '</span></div>' +
     '<div class="list-item"><span class="muted">سفارش‌ها (مجموع)</span><span>' + fmt(d.orders.length) + ' — ' + fmt(ordersTotal) + '</span></div></div>';
-  h += '<div class="btn-row"><button class="btn small" id="cu-edit">ویرایش</button><button class="btn small ghost" id="cu-lead">تبدیل به Lead</button>' +
+  h += '<div class="btn-row"><button class="btn small" id="cu-edit">ویرایش</button><button class="btn small ghost" id="cu-lead">تبدیل به سرنخ</button>' +
     '<button class="btn small secondary" id="cu-arch">' + (c.archived ? 'خروج از آرشیو' : 'آرشیو') + '</button>' +
     '<button class="btn small danger" id="cu-del">حذف دائمی</button></div>';
   if (c.notes) h += '<div class="card"><div class="card-head"><h3>یادداشت</h3></div><p>' + esc(c.notes) + '</p></div>';
   if (cfFields.length) h += secTitle('فیلدهای سفارشی') + '<div class="card">' +
     cfFields.map(f => '<div class="list-item"><span>' + esc(f.label) + '</span><span class="muted">' + esc(f.type === 'boolean' ? (cfMap[f.id] === true ? 'بله' : cfMap[f.id] === false ? 'خیر' : '—') : Array.isArray(cfMap[f.id]) ? cfMap[f.id].join('، ') : (cfMap[f.id] == null ? '—' : cfMap[f.id])) + '</span></div>').join('') + '</div>';
-  h += '<div class="btn-row"><button class="btn small" id="cu-deal">+ Deal</button><button class="btn small" id="cu-proj">+ پروژه</button><button class="btn small" id="cu-order">+ سفارش</button><button class="btn small" id="cu-addcontact">+ مخاطب</button></div>';
-  h += secList('Dealها', d.deals, x => '<div class="list-item" data-nav="deal/' + x.id + '"><div><b>' + esc(x.title) + '</b><br><span class="muted">' + (x.status === 'won' ? 'برده شده' : x.status === 'lost' ? 'باخته' : 'باز') + '</span></div><span class="muted">' + fmt(x.value) + '</span></div>');
+  h += '<div class="btn-row"><button class="btn small" id="cu-deal">+ فرصت فروش</button><button class="btn small" id="cu-proj">+ پروژه</button><button class="btn small" id="cu-order">+ سفارش</button><button class="btn small" id="cu-addcontact">+ مخاطب</button></div>';
+  h += secList('فرصت‌ها', d.deals, x => '<div class="list-item" data-nav="deal/' + x.id + '"><div><b>' + esc(x.title) + '</b><br><span class="muted">' + (x.status === 'won' ? 'برده شده' : x.status === 'lost' ? 'باخته' : 'باز') + '</span></div><span class="muted">' + fmt(x.value) + '</span></div>');
   h += secList('پروژه‌ها', d.projects, x => '<div class="list-item" data-nav="project/' + x.id + '"><div><b>' + esc(x.name) + '</b></div><span class="muted">' + esc(x.status) + '</span></div>');
-  h += secList('Leadها', d.leads, x => '<div class="list-item"><div><b>' + esc(x.name) + '</b></div><span class="muted">' + esc(x.phone || '') + '</span></div>');
+  h += secList('سرنخ‌ها', d.leads, x => '<div class="list-item"><div><b>' + esc(x.name) + '</b></div><span class="muted">' + esc(x.phone || '') + '</span></div>');
   h += secList('سفارش‌ها', d.orders, o => '<div class="list-item" data-nav="order/' + o.id + '"><div><b>' + esc(o.number) + '</b><br><span class="muted">' + esc(o.status) + '</span></div><span class="muted">' + fmt(o.total) + '</span></div>');
   h += secTitle('مخاطبین', d.contacts.length) + '<div class="card">' +
     (d.contacts.length ? d.contacts.map(ct => '<div class="list-item"><div><b>' + esc(ct.name) + '</b>' + (ct.role ? ' ' + badge(ct.role) : '') + '<br><span class="muted">' + esc(ct.phone || '') + (ct.email ? ' — ' + esc(ct.email) : '') + (ct.source ? ' — منبع: ' + esc(ct.source) : '') + '</span></div>' +
@@ -508,13 +509,13 @@ Routes.customer = async function (id) {
   h += secList('پیگیری‌ها', d.followups, f => '<div class="list-item"><div><b>' + esc(f.title) + '</b><br><span class="muted">' + dateFa(f.dueDate) + ' — ' + esc(f.status) + '</span></div></div>');
   h += secList('کارها', d.tasks, t => '<div class="list-item" data-task="' + t.id + '"><div><b>' + esc(t.title) + '</b></div><span class="muted">' + dateFa(t.dueDate) + '</span></div>');
   h += secList('قرارها', d.appointments, a => '<div class="list-item" data-nav="appointments"><div><b>' + esc(a.title) + '</b></div><span class="muted">' + dateTimeFa(a.datetime) + '</span></div>');
-  h += secTitle('تاریخچه کامل (Timeline)') + '<div class="card">' +
+  h += secTitle('تاریخچه کامل') + '<div class="card">' +
     (d.activities.length ? d.activities.map(a => '<div class="timeline-item"><b>' + esc(activityLabel(a.type)) + '</b> — ' + esc(a.note || '') + '<br><span class="muted">' + dateTimeFa(a.createdAt) + '</span></div>').join('') : '<div class="muted">فعالیتی ثبت نشده</div>') + '</div>';
-  h += secTitle('تاریخچه تغییرات (Audit)') + '<div class="card">' +
+  h += secTitle('تاریخچه تغییرات') + '<div class="card">' +
     (d.audit.length ? d.audit.slice(0, 20).map(a => '<div class="timeline-item"><b>' + esc(a.action) + '</b>' + (a.field ? ' — ' + esc(a.field) + ': ' + esc(a.oldVal == null ? '—' : a.oldVal) + ' ← ' + esc(a.newVal == null ? '—' : a.newVal) : '') + '<br><span class="muted">' + dateTimeFa(a.at) + '</span></div>').join('') : '<div class="muted">موردی ثبت نشده</div>') + '</div>';
   setTimeout(function () {
     $('#cu-edit').onclick = function () { openCustomerForm(c); };
-    $('#cu-lead').onclick = function () { guard($('#cu-lead'), async function () { await CustomerService.convertToLead(id, {}); toast('Lead ایجاد شد', 'ok'); render(id); }); };
+    $('#cu-lead').onclick = function () { guard($('#cu-lead'), async function () { await CustomerService.convertToLead(id, {}); toast('سرنخ ایجاد شد', 'ok'); render(id); }); };
     $('#cu-arch').onclick = function () { guard($('#cu-arch'), async function () { await CustomerService.archive(id, !c.archived); toast(c.archived ? 'از آرشیو خارج شد' : 'آرشیو شد', 'ok'); render(id); }); };
     $('#cu-del').onclick = function () {
       confirmDlg('حذف دائمی مشتری؟ در صورت وجود رکورد وابسته، حذف رد می‌شود.', function () { guard($('#cu-del'), async function () { await CustomerService.deleteHard(id); toast('حذف شد', 'ok'); navigate('customers'); }); });
@@ -618,7 +619,7 @@ async function openTaskForm(refType, refId) {
 }
 async function openDealForm(customerId) {
   const settings = await Repo.getSettings();
-  modal('Deal جدید',
+  modal('فرصت فروش جدید',
     field('عنوان *', '<input id="d-title">') +
     field('مشتری *', '<select id="d-cust">' + await customerOptions(customerId) + '</select>') +
     field('ارزش (تومان)', '<input id="d-value" type="number" min="0" step="any">') +
@@ -633,13 +634,13 @@ async function openDealForm(customerId) {
             title: val('d-title').trim(), customerId: val('d-cust'), value: Number(val('d-value') || 0),
             pipelineId: val('d-pipeline'), stageId: val('d-stage') || null, expectedCloseDate: val('d-close') || null,
           });
-          closeModal(); toast('Deal ثبت شد', 'ok'); navigate('deal', deal.id);
+          closeModal(); toast('فرصت فروش ثبت شد', 'ok'); navigate('deal', deal.id);
         });
       };
     });
 }
 async function openDealEditForm(deal) {
-  modal('ویرایش Deal',
+  modal('ویرایش فرصت فروش',
     field('عنوان *', '<input id="de-title" value="' + esc(deal.title || '') + '">') +
     field('مشتری', '<select id="de-cust">' + await customerOptions(deal.customerId) + '</select>') +
     field('ارزش (تومان)', '<input id="de-value" type="number" min="0" step="any" value="' + esc(deal.value == null ? '' : deal.value) + '">') +
@@ -707,7 +708,7 @@ async function openAppointmentForm(customerId, existing) {
 async function openTaskDetail(taskId) {
   const t = await Repo.get('tasks', taskId);
   if (!t) { toast('کار یافت نشد', 'err'); return; }
-  const refLabel = { customer: 'مشتری', project: 'پروژه', deal: 'Deal', automation: 'اتوماسیون' }[t.refType] || '';
+  const refLabel = { customer: 'مشتری', project: 'پروژه', deal: 'فرصت فروش', automation: 'اتوماسیون' }[t.refType] || '';
   let refNav = '';
   if (t.refType === 'customer' && t.refId) refNav = '<button class="btn small ghost" data-nav="customer/' + t.refId + '">مشاهده ' + refLabel + '</button>';
   if (t.refType === 'project' && t.refId) refNav = '<button class="btn small ghost" data-nav="project/' + t.refId + '">مشاهده ' + refLabel + '</button>';
@@ -792,14 +793,14 @@ Routes.company = async function (id) {
     (c.email || c.address ? '<div class="profile-meta">' + (c.email ? '<div class="mrow"><span class="mk">ایمیل</span><span class="mv">' + esc(c.email) + '</span></div>' : '') + (c.address ? '<div class="mrow"><span class="mk">آدرس</span><span class="mv">' + esc(c.address) + '</span></div>' : '') + '</div>' : '') + '</div>' +
     '<div class="btn-row"><button class="btn small" id="co-edit">ویرایش</button><button class="btn small secondary" id="co-arch">' + (c.archived ? 'خروج از آرشیو' : 'آرشیو') + '</button><button class="btn small danger" id="co-del">حذف دائمی</button></div>';
   h += secList('مشتریان این شرکت', d.customers, cu => '<div class="list-item" data-nav="customer/' + cu.id + '"><div><b>' + esc(cu.name) + '</b></div><span class="muted">' + esc(cu.phone || '') + '</span></div>');
-  h += secList('Dealهای مرتبط', d.deals, dl => '<div class="list-item" data-nav="deal/' + dl.id + '"><div><b>' + esc(dl.title) + '</b></div><span class="muted">' + fmt(dl.value) + '</span></div>');
+  h += secList('فرصت‌های فروش مرتبط', d.deals, dl => '<div class="list-item" data-nav="deal/' + dl.id + '"><div><b>' + esc(dl.title) + '</b></div><span class="muted">' + fmt(dl.value) + '</span></div>');
   h += secTitle('تاریخچه تغییرات') + '<div class="card">' +
     (d.audit.length ? d.audit.slice(0, 20).map(a => '<div class="timeline-item"><b>' + esc(a.action) + '</b>' + (a.field ? ' — ' + esc(a.field) + ': ' + esc(a.oldVal == null ? '—' : a.oldVal) + ' ← ' + esc(a.newVal == null ? '—' : a.newVal) : '') + '<br><span class="muted">' + dateTimeFa(a.at) + '</span></div>').join('') : '<div class="muted">موردی ثبت نشده</div>') + '</div>';
   setTimeout(function () {
     $('#co-edit').onclick = function () { openCompanyForm(c); };
     $('#co-arch').onclick = function () { guard($('#co-arch'), async function () { await CompanyService.archive(id, !c.archived); toast('انجام شد', 'ok'); render(id); }); };
     $('#co-del').onclick = function () {
-      confirmDlg('حذف دائمی شرکت؟ در صورت وجود مشتری/Deal وابسته، حذف رد می‌شود.', function () { guard($('#co-del'), async function () { await CompanyService.deleteHard(id); toast('حذف شد', 'ok'); navigate('companies'); }); });
+      confirmDlg('حذف دائمی شرکت؟ در صورت وجود مشتری/فرصت فروش وابسته، حذف رد می‌شود.', function () { guard($('#co-del'), async function () { await CompanyService.deleteHard(id); toast('حذف شد', 'ok'); navigate('companies'); }); });
     };
   }, 0);
   return h;
@@ -821,7 +822,7 @@ Routes.leads = async function () {
     '<select id="ld-status"><option value="">همه وضعیت‌ها</option>' + statuses.map(s => '<option value="' + s.id + '" ' + (f.status === s.id ? 'selected' : '') + '>' + esc(s.name) + '</option>').join('') + '</select>' +
     '<select id="ld-source"><option value="">همه منابع</option>' + sources.map(s => '<option value="' + esc(s) + '" ' + (f.source === s ? 'selected' : '') + '>' + esc(s) + '</option>').join('') + '</select>' +
     '<label><input type="checkbox" id="ld-arch" ' + (f.archived ? 'checked' : '') + '> آرشیو</label></div>' +
-    '<button class="btn btn-block" id="add-lead">+ Lead جدید</button>';
+    '<button class="btn btn-block" id="add-lead">+ سرنخ جدید</button>';
   h += list.length ? '<div class="card">' + list.map((l, i) => {
     const st = statuses.find(s => s.id === l.statusId);
     const converted = !!(l.customerId || l.dealId);
@@ -836,7 +837,7 @@ Routes.leads = async function () {
       (converted && l.customerId ? '<br><span class="muted">مشتری: ' + esc(custName(l.customerId)) + '</span>' : '') + '</div>' +
       '<div style="display:flex;gap:.3rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">' + acts + '</div></div>';
   }).join('') + '</div>'
-    : emptyState('Lead‌ای ثبت نشده است. سرنخ‌های جدید را همین‌جا وارد کنید.', 'ایجاد Lead', 'empty-lead', 'هیچ Lead وجود ندارد');
+    : emptyState('سرنخ‌ای ثبت نشده است. سرنخ‌های جدید را همین‌جا وارد کنید.', 'ایجاد سرنخ', 'empty-lead', 'هیچ سرنخ وجود ندارد');
   setTimeout(function () {
     $('#add-lead').onclick = function () { openLeadForm(); };
     $('#ld-q').oninput = function (e) { FilterState.leads.q = e.target.value; render(); };
@@ -856,18 +857,18 @@ Routes.leads = async function () {
     document.querySelectorAll('[data-ld-arch]').forEach(b => b.onclick = function () { guard(b, async function () { await LeadService.archive(b.dataset.ldArch, true); toast('آرشیو شد', 'ok'); render(); }); });
     document.querySelectorAll('[data-ld-unarch]').forEach(b => b.onclick = function () { guard(b, async function () { await LeadService.archive(b.dataset.ldUnarch, false); toast('از آرشیو خارج شد', 'ok'); render(); }); });
     document.querySelectorAll('[data-ld-del]').forEach(b => b.onclick = function () {
-      confirmDlg('حذف دائمی Lead؟ در صورت تبدیل‌شده بودن، حذف رد می‌شود.', function () { guard(b, async function () { await LeadService.deleteHard(b.dataset.ldDel); toast('حذف شد', 'ok'); render(); }); });
+      confirmDlg('حذف دائمی سرنخ؟ در صورت تبدیل‌شده بودن، حذف رد می‌شود.', function () { guard(b, async function () { await LeadService.deleteHard(b.dataset.ldDel); toast('حذف شد', 'ok'); render(); }); });
     });
   }, 0);
   return h;
 };
 async function openLeadForm(existing) {
   const l = existing || {};
-  modal(existing ? 'ویرایش Lead' : 'Lead جدید',
+  modal(existing ? 'ویرایش سرنخ' : 'سرنخ جدید',
     field('نام *', '<input id="l-name" value="' + esc(l.name || '') + '">') +
     field('تلفن *', '<input id="l-phone" type="tel" value="' + esc(l.phone || '') + '">') +
     field('شرکت', '<input id="l-comp" value="' + esc(l.company || '') + '">') +
-    field('منبع Lead', '<input id="l-src" value="' + esc(l.source || '') + '">') +
+    field('منبع سرنخ', '<input id="l-src" value="' + esc(l.source || '') + '">') +
     field('ارزش احتمالی (تومان)', '<input id="l-value" type="number" min="0" step="any" value="' + esc(l.value || '') + '">') +
     field('محصول/خدمت موردنظر', '<input id="l-want" value="' + esc(l.wanted || '') + '">') +
     field('تاریخ پیگیری بعدی', '<input id="l-fu" type="date" value="' + esc(l.nextFollowUpDate || '') + '">') +
@@ -891,10 +892,10 @@ async function openLeadForm(existing) {
 async function openConvertLead(leadId) {
   const stages = await Repo.list('stages');
   stages.sort((a, b) => a.order - b.order);
-  modal('تبدیل Lead',
-    '<p class="muted">Lead به مشتری تبدیل می‌شود (در صورت تبدیل قبلی، همان مشتری استفاده می‌شود).</p>' +
-    '<label style="display:flex;align-items:center;gap:.4rem"><input type="checkbox" id="cv-deal" style="width:auto"> ایجاد Deal نیز</label>' +
-    field('مرحله Deal', '<select id="cv-stage">' + stages.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('') + '</select>') +
+  modal('تبدیل سرنخ',
+    '<p class="muted">سرنخ به مشتری تبدیل می‌شود (در صورت تبدیل قبلی، همان مشتری استفاده می‌شود).</p>' +
+    '<label style="display:flex;align-items:center;gap:.4rem"><input type="checkbox" id="cv-deal" style="width:auto"> ایجاد فرصت فروش نیز</label>' +
+    field('مرحله فرصت فروش', '<select id="cv-stage">' + stages.map(s => '<option value="' + s.id + '">' + esc(s.name) + '</option>').join('') + '</select>') +
     formErr() + '<button class="btn btn-block" id="cv-go">تبدیل</button>',
     function () {
       $('#cv-go').onclick = function () {
@@ -926,15 +927,15 @@ Routes.deals = async function () {
   let h = seg +
     '<div class="card" style="padding:.7rem"><input id="dl-q" type="search" placeholder="جستجو…" value="' + esc(f.q) + '"></div>' +
     '<div class="filter-bar">' +
-    '<select id="dl-pipe"><option value="">همه Pipelineها</option>' + pipelines.map(p => '<option value="' + p.id + '" ' + (f.pipeline === p.id ? 'selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>' +
+    '<select id="dl-pipe"><option value="">همه فرایندهای فروش</option>' + pipelines.map(p => '<option value="' + p.id + '" ' + (f.pipeline === p.id ? 'selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>' +
     '<select id="dl-stage"><option value="">همه مراحل</option>' + stages.filter(s => !selPipeline || s.pipelineId === selPipeline).sort((a, b) => a.order - b.order).map(s => '<option value="' + s.id + '" ' + (f.stage === s.id ? 'selected' : '') + '>' + esc(s.name) + '</option>').join('') + '</select>' +
     '<select id="dl-status"><option value="">همه وضعیت‌ها</option><option value="open" ' + (f.status === 'open' ? 'selected' : '') + '>باز</option><option value="won" ' + (f.status === 'won' ? 'selected' : '') + '>برده شده</option><option value="lost" ' + (f.status === 'lost' ? 'selected' : '') + '>باخته</option></select>' +
     '<input id="dl-minval" type="number" min="0" step="any" placeholder="حداقل ارزش" value="' + esc(f.minVal) + '">' +
     '<label><input type="checkbox" id="dl-arch" ' + (f.archived ? 'checked' : '') + '> آرشیو</label></div>' +
-    '<button class="btn btn-block" id="add-deal">+ Deal جدید</button>';
+    '<button class="btn btn-block" id="add-deal">+ فرصت فروش جدید</button>';
   if (f.view === 'kanban') {
     const pipe = f.pipeline ? pipelines.find(p => p.id === f.pipeline) : (pipelines.find(p => p.isDefault) || pipelines[0]);
-    if (!pipe) h += emptyState('برای نمایش کانبان، ابتدا یک Pipeline تعریف کنید.', 'تنظیم Pipelineها', 'empty-pipe', 'Pipeline موجود نیست');
+    if (!pipe) h += emptyState('برای نمایش کانبان، ابتدا یک فرایند فروش تعریف کنید.', 'تنظیم فرایندهای فروش', 'empty-pipe', 'فرایند فروش موجود نیست');
     else {
       const pipeStages = stages.filter(s => s.pipelineId === pipe.id).sort((a, b) => a.order - b.order);
       const kbList = list.filter(d => d.status === 'open');
@@ -953,7 +954,7 @@ Routes.deals = async function () {
       (d.archived ? badge('آرشیو', 'warn') : '') +
       '<br><span class="muted">' + esc(custName(d.customerId) || '—') + (d.probability ? ' — احتمال: ' + fmt(d.probability) + '٪' : '') + (d.expectedCloseDate ? ' — فروش مورد انتظار: ' + dateFa(d.expectedCloseDate) : '') + '</span></div>' +
       '<span class="muted"><b>' + fmt(d.value) + '</b></span></div>').join('') + '</div>'
-      : emptyState('Deal‌ای ثبت نشده است. از دکمه بالا اولین Deal را بسازید.', 'ایجاد Deal', 'empty-deal', 'هیچ Deal وجود ندارد');
+      : emptyState('فرصت فروش‌ای ثبت نشده است. از دکمه بالا اولین فرصت فروش را بسازید.', 'ایجاد فرصت فروش', 'empty-deal', 'هیچ فرصت فروش وجود ندارد');
   }
   setTimeout(function () {
     $('#dl-vl').onclick = function () { FilterState.deals.view = 'list'; render(); };
@@ -971,6 +972,25 @@ Routes.deals = async function () {
   }, 0);
   return h;
 };
+// Maps AIGateway/AIService error codes to a short, user-facing Persian message
+// for the "پیشنهاد اقدام بعدی (AI)" card. Purely presentational — does not add
+// any new AI capability or touch the gateway itself.
+function ddAiErrorMessage(code) {
+  var map = {
+    AI_DISABLED: 'قابلیت هوش مصنوعی در حال حاضر غیرفعال است.',
+    GATEWAY_NOT_CONFIGURED: 'اتصال به سرویس هوش مصنوعی هنوز تنظیم نشده است.',
+    TIMEOUT: 'دریافت پیشنهاد بیش از حد طول کشید. دوباره تلاش کنید.',
+    NETWORK_ERROR: 'ارتباط با سرور برقرار نشد. اتصال اینترنت را بررسی کنید.',
+    UNAUTHORIZED: 'دسترسی به سرویس هوش مصنوعی مجاز نیست.',
+    FORBIDDEN: 'دسترسی به سرویس هوش مصنوعی مجاز نیست.',
+    INVALID_REQUEST: 'درخواست نامعتبر بود.',
+    RATE_LIMIT: 'تعداد درخواست‌ها زیاد بوده است. کمی بعد دوباره تلاش کنید.',
+    EMPTY_RESPONSE: 'پاسخی از سرویس هوش مصنوعی دریافت نشد.',
+    INVALID_RESPONSE: 'پاسخ نامعتبر از سرویس هوش مصنوعی دریافت شد.',
+    UPSTREAM_ERROR: 'سرویس هوش مصنوعی موقتاً در دسترس نیست.',
+  };
+  return (code && map[code]) || 'دریافت پیشنهاد با خطا مواجه شد. دوباره تلاش کنید.';
+}
 Routes.deal = async function (id) {
   const d = await DealService.detail(id);
   const deal = d.deal;
@@ -989,12 +1009,38 @@ Routes.deal = async function (id) {
     '<button class="btn small danger" id="dd-del">حذف دائمی</button></div>' +
     '<div class="card">' + field('تغییر مرحله', '<select id="dd-stage">' + stages.map(s => '<option value="' + s.id + '" ' + (deal.stageId === s.id ? 'selected' : '') + '>' + esc(s.name) + (s.isWon ? ' (برد)' : s.isLost ? ' (باخت)' : '') + '</option>').join('') + '</select>') + '</div>' +
     '<div class="btn-row"><button class="btn small" id="dd-call">+ تماس</button><button class="btn small" id="dd-fu">+ پیگیری</button><button class="btn small" id="dd-task">+ کار</button><button class="btn small" id="dd-proj">+ پروژه</button></div>';
+
+  // AI-powered next-action suggestion — wired to the existing AIService.suggestNextAction(dealId)
+  h += '<div class="card" id="dd-ai-card">' +
+    '<div class="section-title">پیشنهاد اقدام بعدی (هوش مصنوعی)</div>' +
+    '<button class="btn small" id="dd-ai-btn">دریافت پیشنهاد</button>' +
+    '<div id="dd-ai-result" style="margin-top:.6rem"></div>' +
+    '</div>';
+
   h += secList('تماس‌ها', d.calls, c => '<div class="list-item" data-call="' + c.id + '"><div><b>' + esc(c.result || '—') + '</b></div><span class="muted">' + dateTimeFa(c.createdAt) + '</span></div>');
   h += secList('پیگیری‌ها', d.followups, f => '<div class="list-item"><div><b>' + esc(f.title) + '</b><br><span class="muted">' + dateFa(f.dueDate) + ' — ' + esc(f.status) + '</span></div></div>');
   h += secList('کارها', d.tasks, t => '<div class="list-item" data-task="' + t.id + '"><div><b>' + esc(t.title) + '</b></div><span class="muted">' + dateFa(t.dueDate) + '</span></div>');
-  h += secTitle('Timeline') + '<div class="card">' +
+  h += secTitle('خط زمانی') + '<div class="card">' +
     (d.activities.length ? d.activities.map(a => '<div class="timeline-item"><b>' + esc(activityLabel(a.type)) + '</b> — ' + esc(a.note || '') + '<br><span class="muted">' + dateTimeFa(a.createdAt) + '</span></div>').join('') : '<div class="muted">فعالیتی ثبت نشده</div>') + '</div>';
   setTimeout(function () {
+    var ddAiBtn = $('#dd-ai-btn');
+    if (ddAiBtn) ddAiBtn.onclick = function () {
+      guard(ddAiBtn, async function () {
+        var box = $('#dd-ai-result');
+        if (box) box.innerHTML = '<div class="muted">در حال دریافت پیشنهاد…</div>';
+        if (typeof AIService === 'undefined' || !AIService.suggestNextAction) {
+          if (box) box.innerHTML = '<div class="error-text">قابلیت پیشنهاد اقدام بعدی در دسترس نیست.</div>';
+          return;
+        }
+        var res = await AIService.suggestNextAction(id);
+        if (!box) return;
+        if (res && res.ok && res.text) {
+          box.innerHTML = '<div>' + esc(res.text).replace(/\n/g, '<br>') + '</div>';
+        } else {
+          box.innerHTML = '<div class="error-text">' + esc(ddAiErrorMessage(res && res.error)) + '</div>';
+        }
+      });
+    };
     $('#dd-edit').onclick = function () { openDealEditForm(deal); };
     $('#dd-stage').onchange = async function (e) {
       try { await DealService.changeStage(id, e.target.value); toast('مرحله تغییر کرد', 'ok'); render(id); }
@@ -1006,7 +1052,7 @@ Routes.deal = async function (id) {
     $('#dd-proj').onclick = function () { openProjectForm(null, id); };
     $('#dd-arch').onclick = function () { guard($('#dd-arch'), async function () { await DealService.archive(id, !deal.archived); toast('انجام شد', 'ok'); render(id); }); };
     $('#dd-del').onclick = function () {
-      confirmDlg('حذف دائمی Deal؟ در صورت وجود رکورد وابسته، حذف رد می‌شود.', function () { guard($('#dd-del'), async function () { await DealService.deleteHard(id); toast('حذف شد', 'ok'); navigate('deals'); }); });
+      confirmDlg('حذف دائمی فرصت فروش؟ در صورت وجود رکورد وابسته، حذف رد می‌شود.', function () { guard($('#dd-del'), async function () { await DealService.deleteHard(id); toast('حذف شد', 'ok'); navigate('deals'); }); });
     };
     document.querySelectorAll('[data-call]').forEach(row => row.onclick = function (e) { if (e.target.closest('button')) return; openCallDetail(row.dataset.call); });
     document.querySelectorAll('[data-task]').forEach(row => row.onclick = function (e) { if (e.target.closest('button')) return; openTaskDetail(row.dataset.task); });
@@ -1038,7 +1084,7 @@ Routes.projects = async function () {
     '<br><span class="muted">' + esc(custName(p.customerId) || 'بدون مشتری') + '</span>' +
     '<br><span class="muted">شروع: ' + (p.startDate ? dateFa(p.startDate) : '—') + ' — ددلاین: ' + (p.deadline ? dateFa(p.deadline) : '—') + '</span>' +
     '<br><span class="muted">آخرین فعالیت: ' + (p.lastActivityAt ? dateFa(p.lastActivityAt) : '—') + '</span></div></div>').join('') + '</div>'
-    : emptyState('هیچ پروژه‌ای وجود ندارد. پروژه‌ها می‌توانند به مشتری یا Deal متصل شوند.', 'ایجاد پروژه', 'empty-proj', 'هنوز پروژه‌ای ثبت نشده');
+    : emptyState('هیچ پروژه‌ای وجود ندارد. پروژه‌ها می‌توانند به مشتری یا فرصت فروش متصل شوند.', 'ایجاد پروژه', 'empty-proj', 'هنوز پروژه‌ای ثبت نشده');
   setTimeout(function () {
     $('#add-proj').onclick = function () { openProjectForm(); };
     $('#pj-q').oninput = function (e) { FilterState.projects.q = e.target.value; render(); };
@@ -1056,7 +1102,7 @@ Routes.project = async function (id) {
   let h = '<div class="profile-card"><div class="profile-top"><div class="avatar">' + esc((p.name || '؟').charAt(0)) + '</div>' +
     '<div class="who"><h2>' + esc(p.name) + '</h2><div class="sub">' + (PROJECT_STATUS[p.status] || p.status) + (p.archived ? ' (آرشیو)' : '') + '</div></div></div>' +
     '<div class="profile-meta"><div class="mrow"><span class="mk">مشتری</span><span class="mv">' + (cust ? esc(cust.name) : '—') + '</span></div>' +
-    (deal ? '<div class="mrow"><span class="mk">Deal مرتبط</span><span class="mv">' + esc(deal.title) + '</span></div>' : '') +
+    (deal ? '<div class="mrow"><span class="mk">فرصت فروش مرتبط</span><span class="mv">' + esc(deal.title) + '</span></div>' : '') +
     '<div class="mrow"><span class="mk">شروع</span><span class="mv">' + (p.startDate ? dateFa(p.startDate) : '—') + '</span></div>' +
     '<div class="mrow"><span class="mk">ددلاین</span><span class="mv">' + (p.deadline ? dateFa(p.deadline) : '—') + '</span></div>' +
     '<div class="mrow"><span class="mk">آخرین فعالیت</span><span class="mv">' + (p.lastActivityAt ? dateFa(p.lastActivityAt) : '—') + '</span></div></div></div>' +
@@ -1064,14 +1110,14 @@ Routes.project = async function (id) {
     Object.keys(PROJECT_STATUS).map(k => '<option value="' + k + '" ' + (p.status === k ? 'selected' : '') + '>' + PROJECT_STATUS[k] + '</option>').join('') + '</select>') + '</div>' +
     '<div class="btn-row"><button class="btn small" id="pd-edit">ویرایش</button>' +
     (cust ? '<button class="btn small ghost" data-nav="customer/' + cust.id + '">مشتری</button>' : '') +
-    (deal ? '<button class="btn small ghost" data-nav="deal/' + deal.id + '">Deal</button>' : '') +
+    (deal ? '<button class="btn small ghost" data-nav="deal/' + deal.id + '">فرصت فروش</button>' : '') +
     '<button class="btn small secondary" id="pd-arch">' + (p.archived ? 'خروج از آرشیو' : 'آرشیو') + '</button>' +
     '<button class="btn small danger" id="pd-del">حذف دائمی</button></div>' +
     '<div class="btn-row"><button class="btn small" id="pd-call">+ تماس</button><button class="btn small" id="pd-fu">+ پیگیری</button><button class="btn small" id="pd-task">+ کار</button></div>';
   h += secList('کارها', d.tasks, t => '<div class="list-item" data-task="' + t.id + '"><div><b>' + esc(t.title) + '</b><br><span class="muted">' + (t.dueDate ? dateFa(t.dueDate) : '—') + ' — ' + (t.status === 'done' ? 'انجام‌شده' : 'باز') + '</span></div></div>');
   h += secList('تماس‌ها', d.calls, c => '<div class="list-item" data-call="' + c.id + '"><div><b>' + esc(c.result || '—') + '</b></div><span class="muted">' + dateTimeFa(c.createdAt) + '</span></div>');
   h += secList('پیگیری‌ها', d.followups, f => '<div class="list-item"><div><b>' + esc(f.title) + '</b><br><span class="muted">' + dateFa(f.dueDate) + ' — ' + esc(f.status) + '</span></div></div>');
-  h += secTitle('Timeline') + '<div class="card">' +
+  h += secTitle('خط زمانی') + '<div class="card">' +
     (d.activities.length ? d.activities.map(a => '<div class="timeline-item"><b>' + esc(activityLabel(a.type)) + '</b> — ' + esc(a.note || '') + '<br><span class="muted">' + dateTimeFa(a.createdAt) + '</span></div>').join('') : '<div class="muted">فعالیتی ثبت نشده</div>') + '</div>';
   setTimeout(function () {
     $('#pd-status').onchange = async function (e) {
@@ -1125,19 +1171,65 @@ Routes.tasks = async function () {
   }, 0);
   return h;
 };
-var CalState = { y: new Date().getFullYear(), m: new Date().getMonth(), sel: null };
+// ---- تقویم شمسی: تبدیل میلادی ↔ شمسی (فقط نمایش؛ داده‌ها همچنان با تاریخ میلادی ISO ذخیره می‌شوند) ----
+var Jalali = (function () {
+  function div(a, b) { return ~~(a / b); }
+  function toJ(gy, gm, gd) {
+    var gdm = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+    var gy2 = gm > 2 ? gy + 1 : gy;
+    var days = 355666 + 365 * gy + div(gy2 + 3, 4) - div(gy2 + 99, 100) + div(gy2 + 399, 400) + gd + gdm[gm - 1];
+    var jy = -1595 + 33 * div(days, 12053); days %= 12053;
+    jy += 4 * div(days, 1461); days %= 1461;
+    if (days > 365) { jy += div(days - 1, 365); days = (days - 1) % 365; }
+    var jm = days < 186 ? 1 + div(days, 31) : 7 + div(days - 186, 30);
+    var jd = 1 + (days < 186 ? days % 31 : (days - 186) % 30);
+    return [jy, jm, jd];
+  }
+  function toG(jy, jm, jd) {
+    jy += 1595;
+    var days = -355668 + 365 * jy + div(jy, 33) * 8 + div((jy % 33) + 3, 4) + jd + (jm < 7 ? (jm - 1) * 31 : (jm - 7) * 30 + 186);
+    var gy = 400 * div(days, 146097); days %= 146097;
+    if (days > 36524) { gy += 100 * div(--days, 36524); days %= 36524; if (days >= 365) days++; }
+    gy += 4 * div(days, 1461); days %= 1461;
+    if (days > 365) { gy += div(days - 1, 365); days = (days - 1) % 365; }
+    var gd = days + 1;
+    var sal = [0, 31, ((gy % 4 === 0 && gy % 100 !== 0) || gy % 400 === 0) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    var gm; for (gm = 0; gm < 13 && gd > sal[gm]; gm++) gd -= sal[gm];
+    return [gy, gm, gd];
+  }
+  function monthLen(jy, jm) {
+    if (jm <= 6) return 31; if (jm <= 11) return 30;
+    var a = toG(jy, 12, 1), b = toG(jy + 1, 1, 1);
+    return Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000);
+  }
+  var NAMES = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+  function faNum(n) { return Number(n).toLocaleString('fa-IR', { useGrouping: false }); }
+  function fromISO(iso) { var p = String(iso).slice(0, 10).split('-'); return toJ(+p[0], +p[1], +p[2]); }
+  function label(iso) { var j = fromISO(iso); return faNum(j[2]) + ' ' + NAMES[j[1] - 1] + ' ' + faNum(j[0]); }
+  return { toJ: toJ, toG: toG, monthLen: monthLen, names: NAMES, faNum: faNum, fromISO: fromISO, label: label };
+})();
+var CalState = (function () { var j = Jalali.fromISO(Dates.todayStr()); return { jy: j[0], jm: j[1], sel: null }; })();
 Routes.calendar = async function () {
   let h = '<div class="cal-head"><button class="btn small secondary" id="cal-prev">ماه قبل</button><b id="cal-title"></b><button class="btn small secondary" id="cal-next">ماه بعد</button></div>' +
     '<div class="card"><div class="cal-grid" id="cal-grid"></div></div><div id="cal-day"></div>';
   setTimeout(function () {
     const grid = $('#cal-grid'), title = $('#cal-title');
+    const isoOf = function (t) { return new Date(t).toISOString().slice(0, 10); };
+    async function monthEvents() {          // رویدادهای ماه شمسی (حداکثر دو ماه میلادی همپوشان)
+      const g1 = Jalali.toG(CalState.jy, CalState.jm, 1), len = Jalali.monthLen(CalState.jy, CalState.jm);
+      const g2 = Jalali.toG(CalState.jy, CalState.jm, len);
+      const a = await CalendarService.forMonth(g1[0], g1[1] - 1);
+      if (g1[0] === g2[0] && g1[1] === g2[1]) return a;
+      const b = await CalendarService.forMonth(g2[0], g2[1] - 1);
+      return Object.assign({}, a, b);
+    }
     async function showDay() {
       const box = $('#cal-day');
       if (!CalState.sel) { box.innerHTML = ''; return; }
-      const byDay = await CalendarService.forMonth(CalState.y, CalState.m);
+      const byDay = await monthEvents();
       const ev = byDay[CalState.sel] || [];
-      const kindLabel = { task: 'کار', followup: 'پیگیری', appointment: 'قرار', deadline: 'ددلاین', call: 'تماس' };
-      box.innerHTML = secTitle(dateFa(CalState.sel), ev.length) + '<div class="card cal-body-anim">' +
+      const kindLabel = { task: 'کار', followup: 'پیگیری', appointment: 'قرار', deadline: 'مهلت', call: 'تماس' };
+      box.innerHTML = secTitle(Jalali.label(CalState.sel), ev.length) + '<div class="card cal-body-anim">' +
         (ev.length ? ev.map(function (e) {
           let attrs = '';
           if (e.type === 'task') attrs = 'data-task="' + e.id + '"';
@@ -1150,19 +1242,20 @@ Routes.calendar = async function () {
       box.querySelectorAll('[data-task]').forEach(r => r.onclick = function (ev) { if (ev.target.closest('button')) return; openTaskDetail(r.dataset.task); });
     }
     async function draw() {
-      title.textContent = new Date(CalState.y, CalState.m, 1).toLocaleDateString('fa-IR', { month: 'long', year: 'numeric' });
-      const byDay = await CalendarService.forMonth(CalState.y, CalState.m);
+      title.textContent = Jalali.names[CalState.jm - 1] + ' ' + Jalali.faNum(CalState.jy);
+      const byDay = await monthEvents();
       const today = Dates.todayStr();
-      const dows = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
+      const dows = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];   // شنبه تا جمعه
       let g = dows.map(function (d) { return '<div class="dow">' + d + '</div>'; }).join('');
-      const firstDow = new Date(Date.UTC(CalState.y, CalState.m, 1)).getUTCDay();
-      const offset = (firstDow + 1) % 7;
+      const g1 = Jalali.toG(CalState.jy, CalState.jm, 1);
+      const t0 = Date.UTC(g1[0], g1[1] - 1, g1[2]);
+      const offset = (new Date(t0).getUTCDay() + 1) % 7;
       for (let i = 0; i < offset; i++) g += '<div></div>';
-      const last = new Date(Date.UTC(CalState.y, CalState.m + 1, 0)).getUTCDate();
+      const last = Jalali.monthLen(CalState.jy, CalState.jm);
       for (let day = 1; day <= last; day++) {
-        const iso = new Date(Date.UTC(CalState.y, CalState.m, day)).toISOString().slice(0, 10);
+        const iso = isoOf(t0 + (day - 1) * 86400000);
         const ev = byDay[iso] || [];
-        g += '<div class="day' + (iso === today ? ' today' : '') + (iso === CalState.sel ? ' selected' : '') + '" data-cal="' + iso + '">' + day +
+        g += '<div class="day' + (iso === today ? ' today' : '') + (iso === CalState.sel ? ' selected' : '') + '" data-cal="' + iso + '">' + Jalali.faNum(day) +
           (ev.length ? '<br>' + ev.slice(0, 3).map(function () { return '<span class="dot"></span>'; }).join('') : '') + '</div>';
       }
       grid.innerHTML = g;
@@ -1172,8 +1265,8 @@ Routes.calendar = async function () {
         showDay();
       });
     }
-    $('#cal-prev').onclick = async function () { CalState.m--; if (CalState.m < 0) { CalState.m = 11; CalState.y--; } await draw(); showDay(); };
-    $('#cal-next').onclick = async function () { CalState.m++; if (CalState.m > 11) { CalState.m = 0; CalState.y++; } await draw(); showDay(); };
+    $('#cal-prev').onclick = async function () { CalState.jm--; if (CalState.jm < 1) { CalState.jm = 12; CalState.jy--; } await draw(); showDay(); };
+    $('#cal-next').onclick = async function () { CalState.jm++; if (CalState.jm > 12) { CalState.jm = 1; CalState.jy++; } await draw(); showDay(); };
     draw();
     if (CalState.sel) showDay();
   }, 0);
@@ -1198,7 +1291,7 @@ Routes.products = async function () {
     '<label><input type="checkbox" id="pr-arch" ' + (f.archived ? 'checked' : '') + '> آرشیو</label></div>' +
     '<button class="btn btn-block" id="add-prod">+ محصول جدید</button>';
   h += list.length ? '<div class="card">' + list.map((p, i) =>
-    '<div class="list-item ' + enterCls(i) + '" data-nav="product/' + p.id + '"><div><b>' + esc(p.name) + '</b> ' + stockBadge(p) + (p.archived ? badge('آرشیو', 'warn') : '') + (p.sku ? ' ' + badge('SKU: ' + p.sku) : '') +
+    '<div class="list-item ' + enterCls(i) + '" data-nav="product/' + p.id + '"><div><b>' + esc(p.name) + '</b> ' + stockBadge(p) + (p.archived ? badge('آرشیو', 'warn') : '') + (p.sku ? ' ' + badge('کد کالا: ' + p.sku) : '') +
     '<br><span class="muted">قیمت: ' + fmt(p.price) + ' تومان' + (p.trackInventory ? ' — موجودی: ' + fmt(p.stock) + ' ' + esc(p.unit || '') : '') + '</span></div></div>').join('') + '</div>'
     : emptyState('محصولی ثبت نشده است. محصولات برای سفارش‌ها و ثبت تماس استفاده می‌شوند.', 'افزودن محصول', 'empty-prod', 'هنوز محصولی ثبت نشده');
   setTimeout(function () {
@@ -1214,7 +1307,7 @@ async function openProductForm(existing) {
   const p = existing || {};
   modal(existing ? 'ویرایش محصول' : 'محصول جدید',
     field('نام محصول *', '<input id="prf-name" value="' + esc(p.name || '') + '">') +
-    field('کد (SKU)', '<input id="prf-sku" value="' + esc(p.sku || '') + '">') +
+    field('کد کالا', '<input id="prf-sku" value="' + esc(p.sku || '') + '">') +
     field('واحد', '<input id="prf-unit" value="' + esc(p.unit || 'عدد') + '">') +
     field('قیمت (تومان) *', '<input id="prf-price" type="number" min="0" step="any" value="' + esc(p.price == null ? '' : p.price) + '">') +
     '<label style="display:flex;align-items:center;gap:.4rem"><input type="checkbox" id="prf-track" ' + (p.trackInventory ? 'checked' : '') + '> ردیابی موجودی</label>' +
@@ -1427,7 +1520,7 @@ Routes.calls = async function () {
     '<b>' + esc(c.result || 'بدون نتیجه') + '</b> ' + badge(custName(c.customerId)) +
     (c.nextCallDate ? ' ' + badge('تماس بعدی: ' + dateFa(c.nextCallDate), 'warn') : '') +
     '<br><span class="muted">' + dateTimeFa(c.createdAt) + (c.notes ? ' — ' + esc(c.notes.slice(0, 60)) : '') + '</span></div></div>').join('') + '</div>'
-    : emptyState('تماسی ثبت نشده است. تماس‌ها در Timeline مشتری و گزارش‌ها استفاده می‌شوند.', 'ثبت تماس', 'empty-call', 'هنوز تماسی ثبت نشده');
+    : emptyState('تماسی ثبت نشده است. تماس‌ها در خط زمانی مشتری و گزارش‌ها استفاده می‌شوند.', 'ثبت تماس', 'empty-call', 'هنوز تماسی ثبت نشده');
   setTimeout(function () {
     $('#add-call').onclick = function () { openCallForm(); };
     $('#ca-q').oninput = function (e) { FilterState.calls.q = e.target.value; render(); };
@@ -1504,7 +1597,7 @@ Routes.appointments = async function () {
     (a.status !== 'cancelled' ? '<button class="btn small" data-ap-edit="' + a.id + '">ویرایش</button>' +
       '<button class="btn small secondary" data-ap-cancel="' + a.id + '">لغو</button>' : '') +
     '</div></div>').join('') + '</div>'
-    : emptyState('قراری ثبت نشده است. قرارها به مشتری و در صورت نیاز به Deal یا پروژه متصل می‌شوند.', 'قرار جدید', 'empty-appt', 'هنوز قراری ثبت نشده');
+    : emptyState('قراری ثبت نشده است. قرارها به مشتری و در صورت نیاز به فرصت فروش یا پروژه متصل می‌شوند.', 'قرار جدید', 'empty-appt', 'هنوز قراری ثبت نشده');
   setTimeout(function () {
     $('#add-appt').onclick = function () { openAppointmentForm(null); };
     var ea = $('#empty-appt'); if (ea) ea.onclick = function () { openAppointmentForm(null); };
@@ -1562,12 +1655,12 @@ Routes.reports = async function () {
   let h = '<div class="stat-cards two">' +
     '<div class="stat"><div class="v v-anim">' + fmt(salesTotal) + '</div><div class="l">فروش کل (تومان)</div></div>' +
     '<div class="stat"><div class="v v-anim">' + fmt(valid.length) + '</div><div class="l">سفارش موثر</div></div>' +
-    '<div class="stat"><div class="v v-anim">' + fmt(open.length) + '</div><div class="l">Deal باز</div></div>' +
+    '<div class="stat"><div class="v v-anim">' + fmt(open.length) + '</div><div class="l">فرصت فروش باز</div></div>' +
     '<div class="stat"><div class="v v-anim">' + fmt(activities.length) + '</div><div class="l">کل فعالیت‌ها</div></div></div>';
   h += secTitle('فروش ۶ ماه اخیر') + '<div class="card">' +
     byMonth.map(x => hbar(new Date(x.m + '-01').toLocaleDateString('fa-IR', { month: 'long' }), x.sum, maxMonth, fmt(x.n) + ' سفارش — ' + fmt(x.sum))).join('') + '</div>';
-  h += secTitle('وضعیت Dealها') + '<div class="card">' +
-    '<div class="list-item"><span>' + badge('باز', 'info') + ' Deal باز</span><span class="muted">' + fmt(open.length) + ' — ارزش: ' + fmt(open.reduce((s, d) => s + num(d.value), 0)) + '</span></div>' +
+  h += secTitle('وضعیت فرصت‌ها') + '<div class="card">' +
+    '<div class="list-item"><span>' + badge('باز', 'info') + ' فرصت فروش باز</span><span class="muted">' + fmt(open.length) + ' — ارزش: ' + fmt(open.reduce((s, d) => s + num(d.value), 0)) + '</span></div>' +
     '<div class="list-item"><span>' + badge('برد', 'ok') + ' برده شده</span><span class="muted">' + fmt(won.length) + ' — ارزش: ' + fmt(won.reduce((s, d) => s + num(d.value), 0)) + '</span></div>' +
     '<div class="list-item"><span>' + badge('باخت', 'danger') + ' باخته</span><span class="muted">' + fmt(lost.length) + '</span></div></div>';
   if (topCustomers.length) h += secTitle('مشتریان برتر (بر اساس خرید)') + '<div class="card">' +
@@ -1578,27 +1671,45 @@ Routes.reports = async function () {
     (Object.keys(byType).length ? Object.keys(byType).map(t =>
       '<div class="list-item"><span>' + esc(t) + '</span><span class="muted">' + fmt(byType[t]) + '</span></div>').join('') : '<div class="muted">فعالیتی ثبت نشده</div>') + '</div>';
   h += secTitle('هشدارهای عملیاتی') + '<div class="card">' +
-    '<div class="list-item" data-nav="reports"><span>' + badge('خوابیده', 'warn') + ' Deal خوابیده</span><span class="muted">' + fmt(stalled.deals.length) + '</span></div>' +
+    '<div class="list-item" data-nav="reports"><span>' + badge('خوابیده', 'warn') + ' فرصت فروش خوابیده</span><span class="muted">' + fmt(stalled.deals.length) + '</span></div>' +
     '<div class="list-item" data-nav="reports"><span>' + badge('خوابیده', 'warn') + ' پروژه خوابیده</span><span class="muted">' + fmt(stalled.projects.length) + '</span></div>' +
     '<div class="list-item" data-nav="products"><span>' + badge('موجودی کم', 'danger') + ' محصولات کم‌موجودی</span><span class="muted">' + fmt(lowStock.length) + '</span></div></div>';
   setTimeout(bindGoToday, 0);
   return h;
 };
+// Badge for the notification "وضعیت دسترسی" row. Input is the normalized state used
+// everywhere else: 'granted' | 'denied' | 'prompt' | 'unsupported' | 'error'.
+// 'unsupported' means only "no notification API at all" (neither native plugin nor browser).
+function notifPermBadge(st) {
+  return st === 'granted' ? badge('فعال', 'ok')
+    : st === 'denied' ? badge('رد شده', 'danger')
+    : st === 'unsupported' ? badge('پشتیبانی نمی‌شود', 'warn')
+    : st === 'error' ? badge('بررسی ناموفق بود', 'danger')
+    : badge('تعیین نشده');
+}
 Routes.settings = async function () {
   const s = await Repo.getSettings();
-  const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  // The Web Notification API does not exist inside the Android WebView, so testing
+  // 'Notification' in window reported "unsupported" even while the native permission was
+  // granted. The real state comes from CRMNative.notifStatus() (backed by
+  // @capacitor/local-notifications on Android, by the Web API in a browser).
+  let perm = 'unsupported';
+  try {
+    if (window.CRMNative && typeof CRMNative.notifStatus === 'function') perm = await CRMNative.notifStatus();
+    else if ('Notification' in window) perm = Notification.permission === 'default' ? 'prompt' : Notification.permission;
+  } catch (e) { perm = 'error'; }
   let h = secTitle('تنظیمات عمومی') + '<div class="card">' +
     field('روزهای بدون فعالیت برای «خوابیده»', '<input id="st-inact" type="number" min="1" step="1" value="' + esc(s.inactivityDays) + '">') +
     field('درصد مالیات پیش‌فرض', '<input id="st-tax" type="number" min="0" max="100" step="any" value="' + esc(s.taxDefault) + '">') +
     '<button class="btn btn-block" id="st-save">ذخیره تنظیمات</button></div>';
   h += secTitle('اعلان‌ها') + '<div class="card">' +
-    '<div class="list-item"><span class="muted">وضعیت Permission</span><span>' +
-    (perm === 'granted' ? badge('فعال', 'ok') : perm === 'denied' ? badge('رد شده', 'danger') : perm === 'unsupported' ? badge('پشتیبانی نمی‌شود', 'warn') : badge('تعیین نشده')) + '</span></div>' +
+    '<div class="list-item"><span class="muted">وضعیت دسترسی</span><span id="st-notif-perm">' +
+    notifPermBadge(perm) + '</span></div>' +
     '<button class="btn btn-block" id="st-notif">فعال‌سازی اعلان‌ها</button>' +
-    '<p class="muted">یادآوری‌ها برای پیگیری، کار و قرار زمان‌بندی می‌شوند. در نسخه Android، اعلان‌ها به‌صورت Native نمایش داده می‌شوند.</p></div>';
+    '<p class="muted">یادآوری‌ها برای پیگیری، کار و قرار زمان‌بندی می‌شوند. در نسخه اندروید، اعلان‌ها به‌صورت بومی نمایش داده می‌شوند.</p></div>';
   h += secTitle('پشتیبان‌گیری و داده') + '<div class="card">' +
-    '<button class="btn btn-block" id="st-export">دانلود پشتیبان JSON</button>' +
-    '<button class="btn secondary btn-block" id="st-csv">دانلود مشتریان (CSV)</button>' +
+    '<button class="btn btn-block" id="st-export">دانلود فایل پشتیبان</button>' +
+    '<button class="btn secondary btn-block" id="st-csv">دانلود مشتریان (اکسل)</button>' +
     '<hr class="divider">' +
     '<input type="file" id="st-import" accept=".json" aria-label="فایل پشتیبان">' +
     '<div id="st-preview"></div></div>';
@@ -1629,7 +1740,7 @@ Routes.settings = async function () {
         const cs = await Repo.list('customers');
         const csv = await BackupService.exportCSV(cs, ['name', 'phone', 'email', 'notes']);
         dlBlob(csv, 'customers-' + Dates.todayStr() + '.csv', 'text/csv;charset=utf-8');
-        toast('CSV آماده شد', 'ok');
+        toast('اکسل آماده شد', 'ok');
       });
     };
     $('#st-import').onchange = function (e) {
@@ -1681,7 +1792,7 @@ Routes.pipelines = async function () {
   const pipelines = await Repo.list('pipelines');
   pipelines.sort((a, b) => (a.order || 0) - (b.order || 0));
   const stages = await Repo.list('stages');
-  let h = '<button class="btn btn-block" id="pl-add">+ Pipeline جدید</button>';
+  let h = '<button class="btn btn-block" id="pl-add">+ فرایند فروش جدید</button>';
   h += pipelines.length ? pipelines.map(p => {
     const ps = stages.filter(s => s.pipelineId === p.id).sort((a, b) => a.order - b.order);
     return secTitle(p.name, ps.length) + '<div class="card">' +
@@ -1693,15 +1804,15 @@ Routes.pipelines = async function () {
         (s.isWon ? ' ' + badge('برد', 'ok') : '') + (s.isLost ? ' ' + badge('باخت', 'danger') : '') + '</div>' +
         '<button class="btn small danger" data-pl-del="' + s.id + '">حذف</button></div>').join('')
       : '<div class="muted">مرحله‌ای تعریف نشده</div>') + '</div>';
-  }).join('') : emptyState('Pipeline‌ای وجود ندارد.', 'ایجاد Pipeline', 'empty-pl', 'فهرست خالی است');
+  }).join('') : emptyState('Pipeline‌ای وجود ندارد.', 'ایجاد فرایند فروش', 'empty-pl', 'فهرست خالی است');
   setTimeout(function () {
     $('#pl-add').onclick = function () {
-      modal('Pipeline جدید', field('نام *', '<input id="pn-name">') + formErr() +
+      modal('فرایند فروش جدید', field('نام *', '<input id="pn-name">') + formErr() +
         '<button class="btn btn-block" id="pn-save">ایجاد</button>', function () {
         $('#pn-save').onclick = function () {
           guard($('#pn-save'), async function () {
             await PipelineService.createPipeline(val('pn-name').trim());
-            closeModal(); toast('Pipeline ایجاد شد', 'ok'); render();
+            closeModal(); toast('فرایند فروش ایجاد شد', 'ok'); render();
           });
         };
       });
@@ -1712,8 +1823,8 @@ Routes.pipelines = async function () {
     });
     document.querySelectorAll('[data-pl-stage]').forEach(b => b.onclick = function () {
       modal('مرحله جدید', field('نام *', '<input id="sn-name">') +
-        '<label style="display:flex;align-items:center;gap:.4rem"><input type="checkbox" id="sn-won"> مرحله برد (Deal برده‌شده)</label>' +
-        '<label style="display:flex;align-items:center;gap:.4rem"><input type="checkbox" id="sn-lost"> مرحله باخت (Deal باخته)</label>' +
+        '<label style="display:flex;align-items:center;gap:.4rem"><input type="checkbox" id="sn-won"> مرحله برد (فرصت فروش برده‌شده)</label>' +
+        '<label style="display:flex;align-items:center;gap:.4rem"><input type="checkbox" id="sn-lost"> مرحله باخت (فرصت فروش باخته)</label>' +
         formErr() + '<button class="btn btn-block" id="sn-save">افزودن</button>', function () {
         $('#sn-save').onclick = function () {
           guard($('#sn-save'), async function () {
@@ -1724,7 +1835,7 @@ Routes.pipelines = async function () {
       });
     });
     document.querySelectorAll('[data-pl-del]').forEach(b => b.onclick = function () {
-      confirmDlg('حذف این مرحله؟ در صورت استفاده در Deal یا پروژه، حذف رد می‌شود.', function () {
+      confirmDlg('حذف این مرحله؟ در صورت استفاده در فرصت فروش یا پروژه، حذف رد می‌شود.', function () {
         guard(b, async function () { await PipelineService.removeStage(b.dataset.plDel); toast('حذف شد', 'ok'); render(); });
       });
     });
@@ -1774,10 +1885,10 @@ Routes.customfields = async function () {
 };
 Routes.more = async function () {
   const items = [
-    ['contacts', 'مخاطبین'], ['companies', 'شرکت‌ها'], ['leads', 'Leadها'], ['projects', 'پروژه‌ها'],
+    ['contacts', 'مخاطبین'], ['companies', 'شرکت‌ها'], ['leads', 'سرنخ‌ها'], ['projects', 'پروژه‌ها'],
     ['calendar', 'تقویم'], ['products', 'محصولات'], ['orders', 'سفارش‌ها'], ['calls', 'تماس‌ها'],
     ['followups', 'پیگیری‌ها'], ['appointments', 'قرارها'], ['reports', 'گزارش‌ها'],
-    ['pipelines', 'Pipelineها'], ['customfields', 'فیلدهای سفارشی'], ['settings', 'تنظیمات'],
+    ['pipelines', 'فرایندهای فروش'], ['customfields', 'فیلدهای سفارشی'], ['settings', 'تنظیمات'],
   ];
   return '<div class="card">' + items.map(i =>
     '<div class="list-item" data-nav="' + i[0] + '"><span>' + esc(i[1]) + '</span></div>').join('') + '</div>';
@@ -2158,7 +2269,7 @@ async function updateBulkBar() {
     '<div style="display:flex;gap:.3rem;flex-wrap:wrap">' +
     '<button class="btn small" id="bk-arch">آرشیو</button>' +
     '<button class="btn small" id="bk-tag">افزودن برچسب</button>' +
-    '<button class="btn small secondary" id="bk-export">خروجی CSV</button>' +
+    '<button class="btn small secondary" id="bk-export">خروجی اکسل</button>' +
     '<button class="btn small secondary" id="bk-exit">پایان انتخاب</button></div></div></div>';
   $('#bk-exit').onclick = function () { BulkState.active = false; BulkState.selected = []; render(); };
   $('#bk-arch').onclick = function () {
@@ -2258,53 +2369,10 @@ function persianize(html) {
 })();
 
 // ============ 3) Wire native bridges ============
-// 3a) Contacts import — button on the contacts page + customers page
-function openDeviceContactsImport() {
-  if (!window.CRMNative || !CRMNative.isNative()) {
-    modal('ورود مخاطبین گوشی',
-      '<p class="muted">این قابلیت فقط در نسخه اندروید (نصب‌شده روی گوشی) در دسترس است. در مرورگر، مخاطبین را به‌صورت دستی یا از طریق ورود فایل اضافه کنید.</p>' +
-      '<button class="btn btn-block" id="dci-close">متوجه شدم</button>',
-      function () { $('#dci-close').onclick = closeModal; });
-    return;
-  }
-  modal('ورود از مخاطبین گوشی', '<div class="page-loading">در حال خواندن مخاطبین گوشی…</div>');
-  guard(null, async function () {
-    const r = await CRMNative.pickDeviceContacts();
-    if (!r.ok) { closeModal(); toast(r.error, 'err'); return; }
-    const list = r.contacts;
-    if (!list.length) { closeModal(); toast('مخاطب قابل_IMPORT یافت نشد', 'warn'); return; }
-    const selectable = list.filter(c => !c.existsInCrm);
-    const existing = list.length - selectable.length;
-    let picked = {};
-    modal('ورود از مخاطبین گوشی',
-      '<p class="muted">' + fmt(list.length) + ' مخاطب خوانده شد — ' + fmt(existing) + ' مورد از قبل در سامانه موجود است و نمایش داده نمی‌شود.' +
-      (selectable.length ? ' موارد زیر را انتخاب کنید:' : '') + '</p>' +
-      (selectable.length
-        ? '<div class="card" style="max-height:40vh;overflow-y:auto;padding:.5rem">' + selectable.map((c, i) =>
-          '<div class="list-item"><div><b>' + esc(c.name) + '</b><br><span class="muted">' + esc(c.phone) + '</span></div>' +
-          '<input type="checkbox" data-dci="' + i + '" style="width:22px;height:22px;accent-color:var(--primary)"></div>').join('') + '</div>'
-        : '<p class="muted">همه مخاطبین از قبل در سامانه موجودند.</p>') +
-      formErr() +
-      '<button class="btn btn-block" id="dci-go"' + (selectable.length ? '' : ' disabled') + '>افزودن انتخاب‌شده‌ها</button>',
-      function () {
-        $('#dci-go').onclick = function () {
-          const chosen = [];
-          document.querySelectorAll('[data-dci]').forEach(cb => { if (cb.checked) chosen.push(selectable[Number(cb.dataset.dci)]); });
-          if (!chosen.length) { showErr(new Error('هیچ مخاطبی انتخاب نشده است')); return; }
-          guard($('#dci-go'), async function () {
-            let added = 0, failed = 0;
-            for (const c of chosen) {
-              try { await CustomerService.create({ name: c.name, phone: c.phone }); added++; }
-              catch (e) { failed++; }
-            }
-            closeModal();
-            toast(fmt(added) + ' مخاطب اضافه شد' + (failed ? ' — ' + fmt(failed) + ' مورد ناموفق' : ''), failed ? 'warn' : 'ok');
-            render();
-          });
-        };
-      });
-  });
-}
+// 3a) Contacts import — button on the contacts page.
+// openDeviceContactsImport() itself is defined once, in customer360.js (loaded
+// after this file), which is the single implementation the button below calls —
+// see that file for the actual native-contacts flow and the shared picker.
 (function wrapContactsRoute() {
   const orig = Routes.contacts;
   Routes.contacts = async function () {
@@ -2468,7 +2536,7 @@ function openCustomerImport() {
       const b = document.createElement('button');
       b.className = 'btn secondary btn-block';
       b.id = 'imp-csv-btn';
-      b.textContent = 'ورود مشتریان از فایل CSV';
+      b.textContent = 'ورود مشتریان از فایل اکسل';
       b.onclick = openCustomerImport;
       anchor.parentNode.insertBefore(b, anchor.nextSibling);
     }, 0);

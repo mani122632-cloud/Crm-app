@@ -200,7 +200,7 @@ const SavedFilterService = {
 const SegmentService = {
   async list() { return Repo.list('segments'); },
   async save(name, conditions) {
-    if (!V.required(name)) throw new Error('نام Segment الزامی است');
+    if (!V.required(name)) throw new Error('نام بخش الزامی است');
     return Repo.save('segments', { name: name.trim(), conditions });
   },
   async remove(id) { return Repo.remove('segments', id); },
