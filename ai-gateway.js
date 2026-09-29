@@ -15,6 +15,11 @@ const AIGateway = {
   // payload: { operation: string, prompt: string }
   // Returns a Promise resolving to { ok: boolean, text?: string, error?: string }.
   async call(payload) {
+      console.log('[AI DEBUG] config:', {
+        enabled: AIConfig && AIConfig.ENABLED,
+        gateway: AIConfig && AIConfig.GATEWAY_BASE_URL,
+        tokenPresent: !!(AIConfig && AIConfig.APP_SHARED_TOKEN)
+      });
     if (!AIConfig || !AIConfig.ENABLED) {
       return { ok: false, error: 'AI_DISABLED' };
     }
